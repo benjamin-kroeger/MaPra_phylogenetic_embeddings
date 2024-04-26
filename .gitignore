@@ -1,0 +1,7 @@
+/build_dimreduction/data/
+/build_dimreduction/saved_models/
+/build_dimreduction/wandb/
+/input_data/
+/output_dir/
+/wandb/
+
