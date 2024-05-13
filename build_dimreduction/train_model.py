@@ -38,8 +38,7 @@ def init_parser():
 def _setup_callback(args):
     # set up early stopping and storage of the best model
     early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=5, verbose=False, mode="min")
-    best_checkpoint = ModelCheckpoint(monitor='val_loss', save_top_k=1, mode="min", dirpath="Data/chpts",
-                                      # filename=f'{type(model).__name__}' + "-{epoch:02d}-{val_loss:.2f}", auto_insert_metric_name=True)
+    best_checkpoint = ModelCheckpoint(monitor='val_loss', save_top_k=1, mode="min", dirpath="build_dimreduction/Data/chpts",
                                       filename=args.model + "_{epoch:02d}_{val_loss:.2f}", auto_insert_metric_name=True)
     lr_monitor = LearningRateMonitor(logging_interval='step')
 

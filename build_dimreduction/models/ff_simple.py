@@ -35,7 +35,7 @@ class FF_Simple(pl.LightningModule):
         anchor_embeddings = self.ff_layer(anchor)
         positive_embeddings = self.ff_layer(positive)
 
-        cosine_similarity = F.cosine_similarity(anchor_embeddings, positive_embeddings, dim=-1)
+        cosine_similarity = 1 - F.cosine_similarity(anchor_embeddings, positive_embeddings, dim=-1)
         loss = cosine_similarity.mean()
 
         return loss

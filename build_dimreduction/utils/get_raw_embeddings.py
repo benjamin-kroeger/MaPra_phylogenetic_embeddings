@@ -30,14 +30,16 @@ hugging_dict = {
 class ProtSeqEmbedder:
 
     def __init__(self, model: Literal['prott5', 'esm']):
-        model_conf = hugging_dict.get(model)
-        self.model_name = model_conf.get('model_name')
-        self.model = model_conf["model_type"].from_pretrained(self.model_name)
-        self.tokenizer = model_conf["tokenizer"].from_pretrained(self.model_name, do_lower_case=False)
+        self.model_conf = hugging_dict.get(model)
+        self.model_name = self.model_conf.get('model_name')
+        self.output_path = os.path.join(os.getcwd(), "input_data/raw_embeddings")
+
+    def _init_huggingface(self):
+
+        self.model = self.model_conf["model_type"].from_pretrained(self.model_name)
+        self.tokenizer = self.model_conf["tokenizer"].from_pretrained(self.model_name, do_lower_case=False)
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-        self.output_path = os.path.join(os.getcwd(),"input_data/raw_embeddings")
 
     def get_raw_embeddings(self, path_to_fasta: str, skip_fasta_loading: bool = False, pp: bool = True) -> list[tuple[str, torch.tensor]]:
         """
@@ -70,6 +72,9 @@ class ProtSeqEmbedder:
                         logger.debug(f'Found precomputed embedding file at {embedfile}')
                         return self._read_h5_embeddings(embedfile)
                     logger.debug('No precomputed embedding file found')
+
+        # init all the necessary huggingface model
+        self._init_huggingface()
 
         # create new dir and wirte pp and pa files
         embedd_output_dir = os.path.join(self.output_path, bof_hash)
@@ -152,6 +157,6 @@ class ProtSeqEmbedder:
 
 if __name__ == '__main__':
     protseq_embedder = ProtSeqEmbedder('prott5')
-    test_embedd = protseq_embedder.get_raw_embeddings('/home/benjaminkroeger/Documents/Master/Master_3_Semester/MaPra/Learning_phy_distances/foo.fasta')
+    test_embedd = protseq_embedder.get_raw_embeddings('/home/benjaminkroeger/Documents/Master/Master_3_Semester/MaPra/Learning_phy_distances/input_data/input_case/test1/phosphatase.fasta')
 
     print('hi')

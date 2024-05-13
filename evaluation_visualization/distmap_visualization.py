@@ -1,17 +1,21 @@
+import hashlib
 import logging.config
 import os
+from collections import defaultdict
 from typing import Literal
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+import requests
 import treeswift
-#import umap.umap_ as umap
+# import umap.umap_ as umap
 from Bio.Phylo.TreeConstruction import DistanceTreeConstructor, DistanceMatrix
 from ete4 import Tree
-from ete4.treeview import TreeStyle
+from ete4.treeview import TreeStyle, NodeStyle
 from scipy.spatial import distance
 
-#from umap import plot
+# from umap import plot
 
 logging.config.fileConfig(
     '/home/benjaminkroeger/Documents/Master/Master_3_Semester/MaPra/Learning_phy_distances/logging.config',
@@ -32,12 +36,13 @@ def _square_to_lower_triangle(dist_square):
 
 class DistmapVizClust:
 
-    def __init__(self, distmap: np.array, names: list[str], is_truth: bool, output_file_suffix: str = '') -> None:
-        self.distmap = distmap
+    family_map = defaultdict()
+    def __init__(self, distmap: pd.DataFrame, is_truth: bool, output_file_suffix: str = '') -> None:
+        self.distmap = distmap.values
         self.out_suffix = 'truth' if is_truth else 'pred' + output_file_suffix
-        self.names = names
+        self.names = list(distmap.columns)
 
-        assert len(names) == distmap.shape[0] == distmap.shape[1]
+        assert len(self.names) == distmap.shape[0] == distmap.shape[1]
 
     def get_tree(self, method: Literal['upgma', 'nj'] = 'upgma') -> tuple[np.array, Tree]:
         """
@@ -94,14 +99,47 @@ class DistmapVizClust:
         # draw the tree
         t = Tree(tree_data.format("newick"), parser=1)
         circular_style = TreeStyle()
-        circular_style.mode = 'r'  # draw tree in circular mode
+        circular_style.show_leaf_name = False
+        circular_style.mode = 'c'  # draw tree in circular mode
         circular_style.scale = 20
+        for node in t.traverse():
+            self._color_leaf_by_fam(node)
         # Write the tree to output
         tree_vis_path = out_filepath % 'Tree' + '.png'
         logger.debug(f'Writing tree to {tree_vis_path}')
         t.render(tree_vis_path, w=183, units='mm', tree_style=circular_style)
 
         return t
+
+    def _color_leaf_by_fam(self, node):
+        if node.is_leaf:
+            node.img_style["fgcolor"] = '#' + self._get_color_from_name(node.name[:6])
+            node.img_style["shape"] = "square"  # Red for protein family A
+        else:
+            node.img_style["fgcolor"] = "#000000"
+            node.img_style["size"] = 1
+
+    def _get_color_from_name(self, node_name: str) -> str:
+        if node_name in self.family_map.keys():
+            family = self.family_map[node_name]
+        else:
+            family = self._query_inter_pro(node_name)
+            self.family_map[node_name] = family
+
+        logger.info(family)
+        return hashlib.sha1(family.encode('utf-8')).hexdigest()[:6]
+
+    def _query_inter_pro(self, name: str) -> str:
+        api_url = f'https://www.ebi.ac.uk:443/interpro/api/entry/all/protein/UniProt/{name}/'
+        response = requests.get(api_url)
+        if response.status_code == 200:
+            results = response.json()['results']
+            for entry in results:
+                if entry['metadata']['type'] == 'family' and entry['metadata']['name'] is not None:
+                    return entry['metadata']['name']
+            for entry in results:
+                if entry['metadata']['type'] == 'homologous_superfamily' and entry['metadata']['name'] is not None:
+                    return entry['metadata']['name']
 
 
     def get_umap(self) -> np.array:

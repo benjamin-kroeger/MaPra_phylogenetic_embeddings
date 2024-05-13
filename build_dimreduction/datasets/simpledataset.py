@@ -7,7 +7,7 @@ class SimpleDataset(Dataset):
     def __init__(self, model: str):
         embedder = ProtSeqEmbedder(model)
         embedd_data = zip(*embedder.get_raw_embeddings(
-            '/home/benjaminkroeger/Documents/Master/Master_3_Semester/MaPra/Learning_phy_distances/foo.fasta'))
+            '/home/benjaminkroeger/Documents/Master/Master_3_Semester/MaPra/Learning_phy_distances/input_data/input_case/test1/phosphatase.fasta'))
         self.ids, self.embeddings = list(embedd_data)
 
     def __len__(self):

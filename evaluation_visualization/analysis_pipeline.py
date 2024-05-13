@@ -13,10 +13,38 @@ logging.config.fileConfig(
 logger = logging.getLogger(__name__)
 
 
-def analyse_distmaps(distmap1: np.array, distmap2: np.array,names:list[str]):
+def _check_triangularitry(df: pd.DataFrame) -> bool:
+    return df.where(np.triu(np.ones(df.shape), k=1).astype(bool)).isna().all().all()
+def _convert_to_full(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.fillna(0)
+    full_matrix = df.values + df.values.T
+    np.fill_diagonal(full_matrix, 0)
+
+    full_df = pd.DataFrame(full_matrix, columns=df.columns, index=df.index)
+    return full_df
+
+
+def align_dfs(df1, df2) -> tuple[pd.DataFrame, pd.DataFrame]:
+    if _check_triangularitry(df1):
+        df1 = _convert_to_full(df1)
+    if _check_triangularitry(df2):
+        df2 = _convert_to_full(df2)
+
+    df1 = df1.sort_index(axis=0).sort_index(axis=1)
+    df2 = df2.sort_index(axis=0).sort_index(axis=1)
+
+    assert (df1.columns == df1.index).all(), "The cols and index of df1 do not match"
+    assert (df2.columns == df2.index).all(), "The cols and index of df2 do not match"
+    assert (df1.columns == df2.columns).all() and (df1.index == df2.index).all(), "There is a column mismatch"
+
+    return df1, df2
+
+
+def analyse_distmaps(distmap1: pd.DataFrame, distmap2: pd.DataFrame):
+    distmap1, distmap2 = align_dfs(distmap1, distmap2)
     logger.debug('Initializing distmap visualization')
-    distmap_visclust1 = DistmapVizClust(distmap1, is_truth=False, names=names)
-    distmap_visclust2 = DistmapVizClust(distmap2, is_truth=True, names=names)
+    distmap_visclust1 = DistmapVizClust(distmap1, is_truth=False)
+    distmap_visclust2 = DistmapVizClust(distmap2, is_truth=True)
 
     logger.debug('Visualizing and scoring new representations')
     clustering_results = [  # ('umap', distmap_visclust1.get_umap(), distmap_visclust2.get_umap()),

@@ -1,10 +1,12 @@
 import argparse
+import os
+from glob import glob
 import torch
 from build_dimreduction.utils.get_raw_embeddings import ProtSeqEmbedder
 from build_dimreduction.models.ff_simple import FF_Simple
 from embedding_distance_metrics import sim_scorer
 from evaluation_visualization.analysis_pipeline import analyse_distmaps
-
+import pandas as pd
 
 # 1. get embeddings
 # 2. load model
@@ -18,8 +20,8 @@ def init_parser():
         description='Hyperparameters for Protein Prediction',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('--checkpoint', type=str,required=True, help='Path to the model checkpoint')
-    parser.add_argument('--fasta', type=str, required=True, help='Path to the fasta file')
+    parser.add_argument('--checkpoint', type=str, required=True, help='Path to the model checkpoint')
+    parser.add_argument('--input', type=str, required=True, help='Path to the fasta file')
 
     args = parser.parse_args()
 
@@ -34,16 +36,28 @@ def _dim_reduction(embeddings, args):
     return reduced
 
 
+def get_input_data(path_to_input_folder: str) -> tuple[str, str]:
+    assert os.path.isdir(path_to_input_folder), 'Path does not exist!'
+
+    files = glob(os.path.join(path_to_input_folder, '*'))
+    fasta_file = [x for x in files if x.endswith('.fasta')][0]
+    distance_file = [x for x in files if x.endswith('.csv')][0]
+
+    return fasta_file, distance_file
+
+
 def main(args):
+    fasta_path, distance_path = get_input_data(args.input)
+
     embedder = ProtSeqEmbedder('prott5')
-    embedd_data = zip(*embedder.get_raw_embeddings(args.fasta))
+    embedd_data = zip(*embedder.get_raw_embeddings(fasta_path))
     ids, embeddings = list(embedd_data)
 
     reduced_embeddings = _dim_reduction(torch.stack(embeddings), args).cpu().detach().numpy()
 
     distance_matrix = sim_scorer.euclidean_distance(reduced_embeddings, reduced_embeddings)
 
-    analyse_distmaps(distmap1=distance_matrix, distmap2=distance_matrix,names=list(ids))
+    analyse_distmaps(distmap1=pd.DataFrame(distance_matrix,index=ids,columns=ids), distmap2=pd.read_csv(distance_path,index_col=0))
 
 
 if __name__ == '__main__':
