@@ -12,7 +12,7 @@ import treeswift
 # import umap.umap_ as umap
 from Bio.Phylo.TreeConstruction import DistanceTreeConstructor, DistanceMatrix
 from ete4 import Tree
-from ete4.treeview import TreeStyle, NodeStyle
+from ete4.treeview import TreeStyle, NodeStyle, TextFace, RectFace, add_face_to_node
 from scipy.spatial import distance
 
 # from umap import plot
@@ -34,9 +34,27 @@ def _square_to_lower_triangle(dist_square):
     return dist_lower_triangle
 
 
-class DistmapVizClust:
+def layout(node):
+    # If node is a leaf, add the node's name as a face object
+    if node.is_leaf:
+        # Create a NodeStyle for each leaf
+        nstyle = NodeStyle()
+        nstyle["size"] = 0  # Set the size of the node
+        node.set_style(nstyle)
 
+        # Creates a RectFace that will be drawn with the "aligned" option in
+        color = '#' + hashlib.sha1(node.name.split('_')[-1].encode('utf-8')).hexdigest()[:6]
+        color_face = RectFace(10, 10,color, color)  # Change the color as needed
+        add_face_to_node(color_face, node, column=1, aligned=True)
+    else:
+        nstyle = NodeStyle()
+        nstyle["size"] = 0  # Set the size of the node
+        node.set_style(nstyle)
+
+
+class DistmapVizClust:
     family_map = defaultdict()
+
     def __init__(self, distmap: pd.DataFrame, is_truth: bool, output_file_suffix: str = '') -> None:
         self.distmap = distmap.values
         self.out_suffix = 'truth' if is_truth else 'pred' + output_file_suffix
@@ -101,25 +119,14 @@ class DistmapVizClust:
         circular_style = TreeStyle()
         circular_style.show_leaf_name = False
         circular_style.mode = 'c'  # draw tree in circular mode
-        circular_style.scale = 20
-        for node in t.traverse():
-            self._color_leaf_by_fam(node)
+        circular_style.scale = 40
+        circular_style.layout_fn = layout
         # Write the tree to output
         tree_vis_path = out_filepath % 'Tree' + '.png'
         logger.debug(f'Writing tree to {tree_vis_path}')
-        t.render(tree_vis_path, w=183, units='mm', tree_style=circular_style)
+        t.render(tree_vis_path, w=1000, units='mm', tree_style=circular_style)
 
         return t
-
-    def _color_leaf_by_fam(self, node):
-        if node.is_leaf:
-            node.img_style["fgcolor"] = '#' + hashlib.sha1(node.name.split('_')[-1].encode('utf-8')).hexdigest()[:6]
-            node.img_style["shape"] = "square"  # Red for protein family A
-        else:
-            node.img_style["fgcolor"] = "#000000"
-            node.img_style["size"] = 1
-
-
 
     def get_umap(self) -> np.array:
         out_filepath = os.path.join(os.environ['OUTPUT_DIR'], f'Umap_{self.out_suffix}')
