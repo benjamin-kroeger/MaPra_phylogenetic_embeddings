@@ -48,7 +48,7 @@ def analyse_distmaps(distmap1: pd.DataFrame, distmap2: pd.DataFrame):
 
     logger.debug('Visualizing and scoring new representations')
     clustering_results = [  # ('umap', distmap_visclust1.get_umap(), distmap_visclust2.get_umap()),
-        ('upgma', distmap_visclust1.get_tree(method='upgma'), distmap_visclust2.get_tree(method='upgma')),
+        #('upgma', distmap_visclust1.get_tree(method='upgma'), distmap_visclust2.get_tree(method='upgma')),
         ('nj', distmap_visclust1.get_tree(method='nj'), distmap_visclust2.get_tree(method='nj')), ]
 
     logger.debug('Computing distmap comparison metrics')

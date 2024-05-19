@@ -113,33 +113,12 @@ class DistmapVizClust:
 
     def _color_leaf_by_fam(self, node):
         if node.is_leaf:
-            node.img_style["fgcolor"] = '#' + self._get_color_from_name(node.name[:6])
+            node.img_style["fgcolor"] = '#' + hashlib.sha1(node.name.split('_')[-1].encode('utf-8')).hexdigest()[:6]
             node.img_style["shape"] = "square"  # Red for protein family A
         else:
             node.img_style["fgcolor"] = "#000000"
             node.img_style["size"] = 1
 
-    def _get_color_from_name(self, node_name: str) -> str:
-        if node_name in self.family_map.keys():
-            family = self.family_map[node_name]
-        else:
-            family = self._query_inter_pro(node_name)
-            self.family_map[node_name] = family
-
-        logger.info(family)
-        return hashlib.sha1(family.encode('utf-8')).hexdigest()[:6]
-
-    def _query_inter_pro(self, name: str) -> str:
-        api_url = f'https://www.ebi.ac.uk:443/interpro/api/entry/all/protein/UniProt/{name}/'
-        response = requests.get(api_url)
-        if response.status_code == 200:
-            results = response.json()['results']
-            for entry in results:
-                if entry['metadata']['type'] == 'family' and entry['metadata']['name'] is not None:
-                    return entry['metadata']['name']
-            for entry in results:
-                if entry['metadata']['type'] == 'homologous_superfamily' and entry['metadata']['name'] is not None:
-                    return entry['metadata']['name']
 
 
     def get_umap(self) -> np.array:

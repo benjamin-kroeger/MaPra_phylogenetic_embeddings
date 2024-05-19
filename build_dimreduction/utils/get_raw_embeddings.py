@@ -60,13 +60,14 @@ class ProtSeqEmbedder:
         fasta_ids = []
 
         with open(path_to_fasta, 'r') as fasta:
+            file_length = self._get_filelength(fasta)
             for i, record in enumerate(SeqIO.parse(fasta, 'fasta')):
                 fasta_seqs.append(str(record.seq))
                 fasta_ids.append(record.id)
 
                 # check if this fasta file has been seen before and if there are existing embeddings
                 if i == 10:
-                    bof_hash = sha1(''.join(fasta_seqs + fasta_ids + [self.model_name]).encode()).hexdigest()[:10]
+                    bof_hash = sha1(''.join(fasta_seqs + fasta_ids + [self.model_name,str(file_length)]).encode()).hexdigest()[:10]
                     if bof_hash in self._get_h5_dirnames():
                         embedfile = os.path.join(self.output_path, bof_hash, embed_type + '.h5')
                         logger.debug(f'Found precomputed embedding file at {embedfile}')
@@ -90,7 +91,8 @@ class ProtSeqEmbedder:
                 "fasta_file": path_to_fasta,
                 "model": self.model_name,
                 "date": str(datetime.now()),
-                "size": len(fasta_seqs)
+                "num_seqs": len(fasta_seqs),
+                "size": file_length
             }, meta, indent=4)
 
         embedfile = os.path.join(self.output_path, bof_hash, embed_type + '.h5')
@@ -154,9 +156,17 @@ class ProtSeqEmbedder:
         h5f.create_dataset(header, data=embedding_tensors)
         h5f.close()
 
+    def _get_filelength(self, file_handle):
+        current_position = file_handle.tell()  # Remember the current position in the file
+        file_handle.seek(0, 2)  # Go to the end of the file
+        file_length = file_handle.tell()  # Get the position at the end (which is the file length)
+        file_handle.seek(current_position)  # Go back to the original position
+        return file_length
+
 
 if __name__ == '__main__':
     protseq_embedder = ProtSeqEmbedder('prott5')
-    test_embedd = protseq_embedder.get_raw_embeddings('/home/benjaminkroeger/Documents/Master/Master_3_Semester/MaPra/Learning_phy_distances/input_data/input_case/test1/phosphatase.fasta')
+    test_embedd = protseq_embedder.get_raw_embeddings(
+        '/home/benjaminkroeger/Documents/Master/Master_3_Semester/MaPra/Learning_phy_distances/input_data/input_case/test1/phosphatase.fasta')
 
     print('hi')
