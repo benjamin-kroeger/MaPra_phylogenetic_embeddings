@@ -40,16 +40,15 @@ def align_dfs(df1, df2) -> tuple[pd.DataFrame, pd.DataFrame]:
     return df1, df2
 
 
-def analyse_distmaps(distmap1: pd.DataFrame, distmap2: pd.DataFrame):
-    distmap1, distmap2 = align_dfs(distmap1, distmap2)
+def analyse_distmaps(distmap1_pred: pd.DataFrame, distmap2_truth: pd.DataFrame):
+    distmap1_pred, distmap2_truth = align_dfs(distmap1_pred, distmap2_truth)
     logger.debug('Initializing distmap visualization')
-    distmap_visclust1 = DistmapVizClust(distmap1, is_truth=False)
-    distmap_visclust2 = DistmapVizClust(distmap2, is_truth=True)
+    distmap_visclust1 = DistmapVizClust(distmap1_pred, is_truth=False)
+    distmap_visclust2 = DistmapVizClust(distmap2_truth, is_truth=True)
 
     logger.debug('Visualizing and scoring new representations')
     clustering_results = [  # ('umap', distmap_visclust1.get_umap(), distmap_visclust2.get_umap()),
-        #('upgma', distmap_visclust1.get_tree(method='upgma'), distmap_visclust2.get_tree(method='upgma')),
-        ('nj', distmap_visclust1.get_tree(method='nj'), distmap_visclust2.get_tree(method='nj')), ]
+        ('nj', distmap_visclust1.get_tree(), distmap_visclust2.get_tree()), ]
 
     logger.debug('Computing distmap comparison metrics')
     metrics = []
@@ -61,6 +60,13 @@ def analyse_distmaps(distmap1: pd.DataFrame, distmap2: pd.DataFrame):
             "norm_robinson": DistmapMetrics.compute_norm_robinson(pred[1], truth[1]),
         })
         labels.append(method_name)
+    # add metric on the raw distance matrices
+    labels.append("raw_distances")
+    metrics.append({
+            "trustworthiness": DistmapMetrics.compute_trustworthiness(distmap1_pred.values, distmap2_truth.values),
+            "spearman": DistmapMetrics.compute_spearman(distmap1_pred.values, distmap2_truth.values),
+            "norm_robinson": pd.NA,
+        })
 
     summary = pd.DataFrame(metrics, index=labels)
     print(summary)

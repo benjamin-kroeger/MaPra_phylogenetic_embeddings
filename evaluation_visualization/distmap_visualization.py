@@ -14,6 +14,7 @@ from Bio.Phylo.TreeConstruction import DistanceTreeConstructor, DistanceMatrix
 from ete4 import Tree
 from ete4.treeview import TreeStyle, NodeStyle, TextFace, RectFace, add_face_to_node
 from scipy.spatial import distance
+import tempfile
 
 # from umap import plot
 
@@ -35,19 +36,22 @@ def _square_to_lower_triangle(dist_square):
 
 
 def layout(node):
+    nstyle = NodeStyle()
+    nstyle["hz_line_width"] = 1  # Increase the width of the horizontal lines
+    nstyle["vt_line_width"] = 1
     # If node is a leaf, add the node's name as a face object
     if node.is_leaf:
         # Create a NodeStyle for each leaf
-        nstyle = NodeStyle()
+
         nstyle["size"] = 0  # Set the size of the node
         node.set_style(nstyle)
 
         # Creates a RectFace that will be drawn with the "aligned" option in
         color = '#' + hashlib.sha1(node.name.split('_')[-1].encode('utf-8')).hexdigest()[:6]
-        color_face = RectFace(10, 10,color, color)  # Change the color as needed
+        color_face = RectFace(10, 10, color, color)  # Change the color as needed
         add_face_to_node(color_face, node, column=1, aligned=True)
     else:
-        nstyle = NodeStyle()
+
         nstyle["size"] = 0  # Set the size of the node
         node.set_style(nstyle)
 
@@ -62,7 +66,7 @@ class DistmapVizClust:
 
         assert len(self.names) == distmap.shape[0] == distmap.shape[1]
 
-    def get_tree(self, method: Literal['upgma', 'nj'] = 'upgma') -> tuple[np.array, Tree]:
+    def get_tree(self) -> tuple[np.array, Tree]:
         """
         Computes the the tree from precomputed distances and saves the tree to disk. It also
         computes and returns the cophenetic distance matrix.
@@ -73,13 +77,13 @@ class DistmapVizClust:
             Cophentic distance matrix.
         """
 
-        out_filepath = os.path.join(os.environ['OUTPUT_DIR'], f'%s_{method}_{self.out_suffix}')
-        tree_data = self._compute_tree(out_filepath, method)
+        out_filepath = os.path.join(os.environ['OUTPUT_DIR'], f'%s_nj_{self.out_suffix}')
+        tree_data = self._compute_tree(out_filepath)
         tree = self._draw_tree(out_filepath, tree_data)
 
         return np.array(tree.cophenetic_matrix()[0]), tree
 
-    def _compute_tree(self, out_filepath: str, method: Literal['upgma', 'nj'] = 'upgma') -> str:
+    def _compute_tree(self, out_filepath: str) -> str:
         """
         Compute a tree on the distance matrix using the specified method.
         Args:
@@ -89,20 +93,26 @@ class DistmapVizClust:
             The newick string of the tree.
         """
         # create a tree
-        triag_dist = DistanceMatrix(matrix=_square_to_lower_triangle(self.distmap), names=self.names)
-        constructor = DistanceTreeConstructor()
-        logger.debug(f'Constructing {method} tree')
-        if method == 'upgma':
-            tree_data = constructor.upgma(distance_matrix=triag_dist)
-        elif method == 'nj':
-            tree_data = constructor.nj(distance_matrix=triag_dist)
+        logger.debug(f'Constructing nj tree')
+        # wirte distmap to local file
+        named_tmp_file = self._write_distmap_phylib()
+
+
         # store the newick file
         newick_filepath = out_filepath % 'Treedata' + '.nw'
         logger.debug(f'Writing newick to {newick_filepath}')
-        with open(newick_filepath, 'w') as file:
-            file.write(tree_data.format("newick"))
 
-        return tree_data.format("newick")
+        return
+
+    def _write_distmap_phylib(self) -> tempfile.NamedTemporaryFile:
+        sep = '\t'
+        distmap_phylibfile = tempfile.NamedTemporaryFile(mode='w', suffix='.phylib')
+        distmap_phylibfile.write(f'{len(self.names)}\n')
+        for name, row in zip(self.names, self.distmap):
+            values_str = sep.join(map(str,row))
+            distmap_phylibfile.write(f'{name}\t{values_str}\n')
+        distmap_phylibfile.flush()
+        return distmap_phylibfile
 
     def _draw_tree(self, out_filepath: str, tree_data: str) -> Tree:
         """

@@ -57,7 +57,7 @@ def main(args):
 
     distance_matrix = sim_scorer.euclidean_distance(reduced_embeddings, reduced_embeddings)
 
-    analyse_distmaps(distmap1=pd.DataFrame(distance_matrix,index=ids,columns=ids), distmap2=pd.read_csv(distance_path,index_col=0))
+    analyse_distmaps(distmap1_pred=pd.DataFrame(distance_matrix, index=ids, columns=ids), distmap2_truth=pd.read_csv(distance_path, index_col=0))
 
 
 if __name__ == '__main__':
