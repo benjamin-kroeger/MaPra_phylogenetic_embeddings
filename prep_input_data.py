@@ -102,4 +102,4 @@ class DataPreper:
 
 if __name__ == '__main__':
     test_prepper = DataPreper()
-    test_prepper.enhance_fasta("/home/benjaminkroeger/Documents/Master/Master_3_Semester/MaPra/Learning_phy_distances/input_data/input_case/KLK/mini.fasta")
+    test_prepper.enhance_fasta("/home/benjaminkroeger/Documents/Master/Master_3_Semester/MaPra/Learning_phy_distances/input_data/input_case/kinase/kinase_porcessiing.fa")

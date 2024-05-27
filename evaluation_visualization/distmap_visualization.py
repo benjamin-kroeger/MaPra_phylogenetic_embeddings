@@ -1,20 +1,19 @@
 import hashlib
 import logging.config
 import os
+import re
+import tempfile
 from collections import defaultdict
-from typing import Literal
+from subprocess import PIPE, Popen, STDOUT
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import requests
-import treeswift
+import seaborn as sns
 # import umap.umap_ as umap
-from Bio.Phylo.TreeConstruction import DistanceTreeConstructor, DistanceMatrix
 from ete4 import Tree
-from ete4.treeview import TreeStyle, NodeStyle, TextFace, RectFace, add_face_to_node
+from ete4.treeview import TreeStyle, NodeStyle, RectFace, add_face_to_node
 from scipy.spatial import distance
-import tempfile
 
 # from umap import plot
 
@@ -22,6 +21,19 @@ logging.config.fileConfig(
     '/home/benjaminkroeger/Documents/Master/Master_3_Semester/MaPra/Learning_phy_distances/logging.config',
     disable_existing_loggers=False)
 logger = logging.getLogger(__name__)
+
+color_palette = sns.color_palette("colorblind", 20)
+color_assignment = {}
+
+
+def get_color(familiy_name: str) -> str:
+    if familiy_name in color_assignment.keys():
+        return color_assignment[familiy_name]
+
+    new_color = color_palette[len(color_assignment)]
+    color_assignment[familiy_name] = '#{:02x}{:02x}{:02x}'.format(int(new_color[0]*255), int(new_color[1]*255), int(new_color[2]*255))
+
+    return color_assignment[familiy_name]
 
 
 def _square_to_lower_triangle(dist_square):
@@ -47,8 +59,8 @@ def layout(node):
         node.set_style(nstyle)
 
         # Creates a RectFace that will be drawn with the "aligned" option in
-        color = '#' + hashlib.sha1(node.name.split('_')[-1].encode('utf-8')).hexdigest()[:6]
-        color_face = RectFace(10, 10, color, color)  # Change the color as needed
+        color = get_color(node.name.split('_')[-1])
+        color_face = RectFace(20, 10, color, color)  # Change the color as needed
         add_face_to_node(color_face, node, column=1, aligned=True)
     else:
 
@@ -56,7 +68,7 @@ def layout(node):
         node.set_style(nstyle)
 
 
-class DistmapVizClust:
+class TreeBuilder:
     family_map = defaultdict()
 
     def __init__(self, distmap: pd.DataFrame, is_truth: bool, output_file_suffix: str = '') -> None:
@@ -96,20 +108,26 @@ class DistmapVizClust:
         logger.debug(f'Constructing nj tree')
         # wirte distmap to local file
         named_tmp_file = self._write_distmap_phylib()
-
-
+        # run rapidnj
+        cmd = (f'/home/benjaminkroeger/Documents/Master/Master_3_Semester/MaPra/Learning_phy_distances/evaluation_visualization/rapidnj '
+               f'{named_tmp_file.name} -i pd -o t')
+        p = Popen(cmd, stdout=PIPE, stderr=STDOUT, shell=True)
+        newick_data = p.stdout.read().decode('utf-8')
+        newick_data = re.sub(r'.*% \r', '', newick_data)
         # store the newick file
         newick_filepath = out_filepath % 'Treedata' + '.nw'
         logger.debug(f'Writing newick to {newick_filepath}')
+        with open(newick_filepath, 'w') as file:
+            file.write(newick_data.format("newick"))
 
-        return
+        return newick_data
 
     def _write_distmap_phylib(self) -> tempfile.NamedTemporaryFile:
         sep = '\t'
         distmap_phylibfile = tempfile.NamedTemporaryFile(mode='w', suffix='.phylib')
         distmap_phylibfile.write(f'{len(self.names)}\n')
         for name, row in zip(self.names, self.distmap):
-            values_str = sep.join(map(str,row))
+            values_str = sep.join(map(str, row))
             distmap_phylibfile.write(f'{name}\t{values_str}\n')
         distmap_phylibfile.flush()
         return distmap_phylibfile
@@ -124,12 +142,13 @@ class DistmapVizClust:
         Returns:
             None
         """
+        num_names = len(self.names)
         # draw the tree
         t = Tree(tree_data.format("newick"), parser=1)
         circular_style = TreeStyle()
         circular_style.show_leaf_name = False
         circular_style.mode = 'c'  # draw tree in circular mode
-        circular_style.scale = 40
+        circular_style.scale = num_names // 2
         circular_style.layout_fn = layout
         # Write the tree to output
         tree_vis_path = out_filepath % 'Tree' + '.png'

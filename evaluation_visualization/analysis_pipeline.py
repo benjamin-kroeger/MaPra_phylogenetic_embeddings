@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from evaluation_visualization.compute_distmap_metrics import DistmapMetrics
-from evaluation_visualization.distmap_visualization import DistmapVizClust
+from evaluation_visualization.distmap_visualization import TreeBuilder
 from inference_pipeline.embedding_distance_metrics import sim_scorer
 
 logging.config.fileConfig(
@@ -43,11 +43,11 @@ def align_dfs(df1, df2) -> tuple[pd.DataFrame, pd.DataFrame]:
 def analyse_distmaps(distmap1_pred: pd.DataFrame, distmap2_truth: pd.DataFrame):
     distmap1_pred, distmap2_truth = align_dfs(distmap1_pred, distmap2_truth)
     logger.debug('Initializing distmap visualization')
-    distmap_visclust1 = DistmapVizClust(distmap1_pred, is_truth=False)
-    distmap_visclust2 = DistmapVizClust(distmap2_truth, is_truth=True)
+    distmap_visclust1 = TreeBuilder(distmap1_pred, is_truth=False)
+    distmap_visclust2 = TreeBuilder(distmap2_truth, is_truth=True)
 
     logger.debug('Visualizing and scoring new representations')
-    clustering_results = [  # ('umap', distmap_visclust1.get_umap(), distmap_visclust2.get_umap()),
+    clustering_results = [
         ('nj', distmap_visclust1.get_tree(), distmap_visclust2.get_tree()), ]
 
     logger.debug('Computing distmap comparison metrics')
