@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from evaluation_visualization.compute_distmap_metrics import DistmapMetrics
-from evaluation_visualization.distmap_visualization import TreeBuilder
+from evaluation_visualization.tree_building import TreeBuilder
 from inference_pipeline.embedding_distance_metrics import sim_scorer
 
 logging.config.fileConfig(

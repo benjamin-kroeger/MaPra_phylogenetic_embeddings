@@ -4,7 +4,7 @@ from glob import glob
 import torch
 from build_dimreduction.utils.get_raw_embeddings import ProtSeqEmbedder
 from build_dimreduction.models.ff_simple import FF_Simple
-from embedding_distance_metrics import sim_scorer
+from inference_pipeline.embedding_distance_metrics import sim_scorer
 from evaluation_visualization.analysis_pipeline import analyse_distmaps
 import pandas as pd
 

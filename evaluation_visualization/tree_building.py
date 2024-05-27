@@ -1,4 +1,3 @@
-import hashlib
 import logging.config
 import os
 import re
@@ -90,12 +89,17 @@ class TreeBuilder:
         """
 
         out_filepath = os.path.join(os.environ['OUTPUT_DIR'], f'%s_nj_{self.out_suffix}')
-        tree_data = self._compute_tree(out_filepath)
+        tree_data = self.compute_tree()
+        # store the newick file
+        newick_filepath = out_filepath % 'Treedata' + '.nw'
+        logger.debug(f'Writing newick to {newick_filepath}')
+        with open(newick_filepath, 'w') as file:
+            file.write(tree_data)
         tree = self._draw_tree(out_filepath, tree_data)
 
         return np.array(tree.cophenetic_matrix()[0]), tree
 
-    def _compute_tree(self, out_filepath: str) -> str:
+    def compute_tree(self) -> str:
         """
         Compute a tree on the distance matrix using the specified method.
         Args:
@@ -110,16 +114,11 @@ class TreeBuilder:
         named_tmp_file = self._write_distmap_phylib()
         # run rapidnj
         cmd = (f'/home/benjaminkroeger/Documents/Master/Master_3_Semester/MaPra/Learning_phy_distances/evaluation_visualization/rapidnj '
-               f'{named_tmp_file.name} -i pd -o t')
+               f'{named_tmp_file.name} -i pd -o t -c 12')
         p = Popen(cmd, stdout=PIPE, stderr=STDOUT, shell=True)
         newick_data = p.stdout.read().decode('utf-8')
         newick_data = re.sub(r'.*% \r', '', newick_data)
-        # store the newick file
-        newick_filepath = out_filepath % 'Treedata' + '.nw'
-        logger.debug(f'Writing newick to {newick_filepath}')
-        with open(newick_filepath, 'w') as file:
-            file.write(newick_data.format("newick"))
-
+        logger.debug("Finished tree construction")
         return newick_data
 
     def _write_distmap_phylib(self) -> tempfile.NamedTemporaryFile:

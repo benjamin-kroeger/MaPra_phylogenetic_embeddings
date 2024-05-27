@@ -3,16 +3,15 @@ from typing import Any
 
 import pytorch_lightning as pl
 import torch
-from pytorch_lightning.utilities.types import OptimizerLRScheduler, TRAIN_DATALOADERS, EVAL_DATALOADERS
-from torch import nn, optim
 import torch.nn.functional as F
-from build_dimreduction.datasets.simpledataset import SimpleDataset
+from torch import nn, optim
+
 from build_dimreduction.utils.seeding import seed_worker
 
 
 class FF_Simple(pl.LightningModule):
 
-    def __init__(self, input_dim: int, hidden_dim: int, output_dim: int, lr: float, weight_decay, non_linearity=nn.ReLU()):
+    def __init__(self,dataset, input_dim: int, hidden_dim: int, output_dim: int, lr: float, weight_decay, non_linearity=nn.ReLU()):
         super().__init__()
         self.save_hyperparameters()
 
@@ -23,6 +22,9 @@ class FF_Simple(pl.LightningModule):
         )
 
         self.validation_outputs = defaultdict(list)
+        self.dataset = dataset
+
+
 
     def forward(self, embeddings) -> Any:
 
@@ -60,11 +62,11 @@ class FF_Simple(pl.LightningModule):
         return [optimizer]  # , [lr_scheduler]
 
     def train_dataloader(self):
-        return torch.utils.data.DataLoader(SimpleDataset('prott5'), shuffle=False, batch_size=10, pin_memory=True,
+        return torch.utils.data.DataLoader(self.dataset, shuffle=False, batch_size=10, pin_memory=True,
                                            num_workers=4, worker_init_fn=seed_worker,
                                            sampler=None)
 
     def val_dataloader(self):
-        return torch.utils.data.DataLoader(SimpleDataset('prott5'), shuffle=False, batch_size=10, pin_memory=True,
+        return torch.utils.data.DataLoader(self.dataset, shuffle=False, batch_size=10, pin_memory=True,
                                            num_workers=4, worker_init_fn=seed_worker,
                                            sampler=None)

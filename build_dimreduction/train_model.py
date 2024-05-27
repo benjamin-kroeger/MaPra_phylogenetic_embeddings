@@ -6,6 +6,7 @@ import torch
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint, GradientAccumulationScheduler, LearningRateMonitor
 from pytorch_lightning.loggers import WandbLogger
 
+from build_dimreduction.datasets.sampling_dataset import SamplingDataset
 from models.ff_simple import FF_Simple
 import pytorch_lightning as pl
 import wandb
@@ -20,6 +21,7 @@ def init_parser():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     # Performance related arguments
+    parser.add_argument('--input_folder', type=str, required=True, help='Path to input folder')
     parser.add_argument('--num_workers', type=int, required=False, default=8,
                         help='CPU Cores')
     parser.add_argument('--half_precision', action='store_true', default=False, help='Train the model with torch.float16 instead of torch.float32')
@@ -52,9 +54,10 @@ def _setup_callback(args):
 
 
 def _get_model(args):
-    #model = globals()[args.model]()
+    # model = globals()[args.model]()
     # init the model and send it to the device
-    model = FF_Simple(input_dim=1024, hidden_dim=512, output_dim=256, lr=args.lr, weight_decay=args.weight_decay)
+    dataset = SamplingDataset('prott5', args.input_folder)
+    model = FF_Simple(dataset=dataset, input_dim=1024, hidden_dim=512, output_dim=256, lr=args.lr, weight_decay=args.weight_decay)
 
     return model
 
@@ -102,7 +105,6 @@ def main(args):
 
         wandb_logger.finalize('success')
         wandb.finish()
-
 
         return best_model_path
 
