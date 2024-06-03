@@ -20,8 +20,6 @@ logging.config.fileConfig(
 logger = logging.getLogger(__name__)
 
 
-
-
 class SamplingDataset(Dataset):
     def __init__(self, model: Literal['prott5', 'esm'], path_to_input_data: str):
         path_to_fasta, path_to_gt_distances = get_input_data(path_to_input_data)
@@ -29,35 +27,36 @@ class SamplingDataset(Dataset):
         assert os.path.isfile(path_to_gt_distances), "Path to distances does not exist"
         embedder = ProtSeqEmbedder(model)
         embedd_data = zip(*embedder.get_raw_embeddings(path_to_fasta))
+        self.path_to_distances = path_to_gt_distances
 
         self.ids, self.embeddings = list(embedd_data)
-        self.sample_pairs = self._get_sampling_pairs(path_to_gt_distances)
+        self.sample_pairs = None
 
     def __len__(self):
         return len(self.embeddings)
 
-    def _get_sampling_pairs(self, path_to_distances):
+    def compute_sampling_pairs(self, threshold: float):
         logger.debug("Computing possible sampling pairs")
-        cophentic_matrix = self._get_cophentic_distmatrix(path_to_distances)
-        cophentic_matrix = cophentic_matrix.reindex(self.ids,axis=0).reindex(self.ids,axis=1)
+        cophentic_matrix = self._get_cophentic_distmatrix(self.path_to_distances)
+        cophentic_matrix = cophentic_matrix.reindex(self.ids, axis=0).reindex(self.ids, axis=1)
 
-        cond1 = cophentic_matrix < 0.5
+        cond1 = cophentic_matrix < threshold
         cond2 = cophentic_matrix > 0
         indices = np.where(cond1 & cond2)
 
-        coordinates = list(zip(indices[0],indices[1]))
-        return coordinates
+        coordinates = list(zip(indices[0], indices[1]))
+        self.sample_pairs = coordinates
 
     def _get_cophentic_distmatrix(self, path_to_distances):
         logger.debug(f"Loading distance matrix from {path_to_distances}")
-        treebuilder = TreeBuilder(_convert_to_full(pd.read_csv(path_to_distances,index_col=0)), is_truth=True)
+        treebuilder = TreeBuilder(_convert_to_full(pd.read_csv(path_to_distances, index_col=0)), is_truth=True)
         newick_rep = treebuilder.compute_tree()
         t = Tree(newick_rep.format("newick"), parser=1)
         cophentic_distances, names = t.cophenetic_matrix()
 
-        return pd.DataFrame(cophentic_distances,index=names,columns=names)
+        return pd.DataFrame(cophentic_distances, index=names, columns=names)
 
     def __getitem__(self, idx):
         # Calculate adjusted index for the second embedding
-        index1,index2 = self.sample_pairs[idx]
+        index1, index2 = self.sample_pairs[idx]
         return torch.cat([self.embeddings[index1][None, :], self.embeddings[index2][None, :]], dim=0)

@@ -30,7 +30,9 @@ def init_parser():
 
 def _dim_reduction(embeddings, args):
     model = FF_Simple.load_from_checkpoint(args.checkpoint)
-
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+    embeddings = embeddings.to(device)
     reduced = model(embeddings)
 
     return reduced
