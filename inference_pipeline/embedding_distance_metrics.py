@@ -5,7 +5,7 @@ from scipy.spatial import distance
 
 class sim_scorer:
     """
-    This class provides multiple methods to calculate similarity between two embeddings.
+    This class provides multiple methods to calculate similarity between two prott5_embeddings.
     """
 
     @staticmethod

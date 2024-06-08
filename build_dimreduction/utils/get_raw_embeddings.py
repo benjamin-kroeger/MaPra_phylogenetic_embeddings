@@ -43,13 +43,13 @@ class ProtSeqEmbedder:
 
     def get_raw_embeddings(self, path_to_fasta: str, skip_fasta_loading: bool = False, pp: bool = True) -> list[tuple[str, torch.tensor]]:
         """
-        This method returns the raw embeddings of protein sequences. If the fasta file has been converted to embeddings before, the
-        embeddings are read from the h5 file.
+        This method returns the raw prott5_embeddings of protein sequences. If the fasta file has been converted to prott5_embeddings before, the
+        prott5_embeddings are read from the h5 file.
         Identification is done by checking the hash over: first 10 Seqs, first 10 Ids, Modelname
         Args:
             path_to_fasta: Path the fasta file that shall be read
             skip_fasta_loading:
-            pp: Whether to load per protein embeddings
+            pp: Whether to load per protein prott5_embeddings
 
         Returns:
             A list containing the id and the embedding for each sequence
@@ -65,7 +65,7 @@ class ProtSeqEmbedder:
                 fasta_seqs.append(str(record.seq))
                 fasta_ids.append(record.id)
 
-                # check if this fasta file has been seen before and if there are existing embeddings
+                # check if this fasta file has been seen before and if there are existing prott5_embeddings
                 if i == 10:
                     bof_hash = sha1(''.join(fasta_seqs + fasta_ids + [self.model_name,str(file_length)]).encode()).hexdigest()[:10]
                     if bof_hash in self._get_h5_dirnames():
@@ -108,7 +108,7 @@ class ProtSeqEmbedder:
 
     def _read_h5_embeddings(self, h5_filepath) -> list[tuple[str, torch.tensor]]:
         """
-        Read the h5 embeddings from a h5 file and return them as a list of tuples.
+        Read the h5 prott5_embeddings from a h5 file and return them as a list of tuples.
         Args:
             h5_filepath: The path to the h5 file
 
@@ -117,7 +117,7 @@ class ProtSeqEmbedder:
         """
         embeddings = []
         embedd_file = h5py.File(h5_filepath)
-        pbar_desc = f'Loading embeddings'
+        pbar_desc = f'Loading prott5_embeddings'
         with tqdm(total=len(embedd_file.keys()), desc=pbar_desc) as pbar:
             for key in embedd_file.keys():
                 embedding = np.array(embedd_file[key])

@@ -8,7 +8,7 @@ from inference_pipeline.embedding_distance_metrics import sim_scorer
 from evaluation_visualization.analysis_pipeline import analyse_distmaps
 import pandas as pd
 
-# 1. get embeddings
+# 1. get prott5_embeddings
 # 2. load model
 # 3. compute dim reduction
 # 4. compute distance matrix

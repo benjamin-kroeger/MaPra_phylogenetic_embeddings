@@ -1,13 +1,16 @@
 import argparse
 import os
 from datetime import datetime
-
+import torch.nn.functional as F
+import numpy as np
 import torch
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint, GradientAccumulationScheduler, LearningRateMonitor
 from pytorch_lightning.loggers import WandbLogger
 
 from build_dimreduction.datasets.sampling_dataset import SamplingDataset
 from models.ff_simple import FF_Simple
+from models.ff_triplets import FF_Triplets
+from build_dimreduction.datasets.triplet_sampling_dataset import TripletSamplingDataset
 import pytorch_lightning as pl
 import wandb
 import seaborn as sns
@@ -26,7 +29,7 @@ def init_parser():
                         help='CPU Cores')
     parser.add_argument('--half_precision', action='store_true', default=False, help='Train the model with torch.float16 instead of torch.float32')
     parser.add_argument('--cpu_only', action='store_true', default=False, help='If the GPU is to WEAK use cpu only')
-    parser.add_argument('--model', type=str, required=False, default='ff_simple')
+    parser.add_argument('--model', type=str, required=False, default='ff_triplets')
     parser.add_argument('--lr', type=float, required=False, default=1e-3, help='Learning rate')
     parser.add_argument('--weight_decay', type=float, required=False, default=1e-3, help='Weight decay')
     parser.add_argument('--acc_grad', type=bool, default=False)
@@ -53,12 +56,15 @@ def _setup_callback(args):
     return callbacks
 
 
-def _get_model(args):
+def get_model(args,device):
     # model = globals()[args.model]()
     # init the model and send it to the device
-    dataset = SamplingDataset('prott5', args.input_folder)
-    model = FF_Simple(dataset=dataset, input_dim=1024, hidden_dim=512, output_dim=256, lr=args.lr, weight_decay=args.weight_decay,sampling_threshold=0.5)
-
+    dataset = TripletSamplingDataset('prott5', args.input_folder,device=device)
+    model = FF_Triplets(dataset=dataset, input_dim=1024, hidden_dim=512, output_dim=256, lr=args.lr, weight_decay=args.weight_decay,
+                        sampling_threshold=0.5,
+                        batch_size=256)
+    model.to(device)
+    dataset.set_embedding_pairings(model.forward)
     return model
 
 
@@ -78,8 +84,8 @@ def main(args):
 
     # initialize 5 fold cross validation
     for fold in range(1):
-        model = _get_model(args)
-        model.to(device)
+        model = get_model(args,device)
+
 
         callbacks = _setup_callback(args)
         # set up a logger

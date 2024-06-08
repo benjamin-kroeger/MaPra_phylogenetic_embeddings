@@ -39,6 +39,7 @@ class SamplingDataset(Dataset):
         logger.debug("Computing possible sampling pairs")
         cophentic_matrix = self._get_cophentic_distmatrix(self.path_to_distances)
         cophentic_matrix = cophentic_matrix.reindex(self.ids, axis=0).reindex(self.ids, axis=1)
+        cophentic_matrix = np.tril(cophentic_matrix)
 
         cond1 = cophentic_matrix < threshold
         cond2 = cophentic_matrix > 0
@@ -46,6 +47,7 @@ class SamplingDataset(Dataset):
 
         coordinates = list(zip(indices[0], indices[1]))
         self.sample_pairs = coordinates
+        logger.debug(f"Sampling from {len(coordinates)} pairs")
 
     def _get_cophentic_distmatrix(self, path_to_distances):
         logger.debug(f"Loading distance matrix from {path_to_distances}")
