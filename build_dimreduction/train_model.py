@@ -34,6 +34,7 @@ def init_parser():
     parser.add_argument('--weight_decay', type=float, required=False, default=1e-3, help='Weight decay')
     parser.add_argument('--acc_grad', type=bool, default=False)
     parser.add_argument('--epochs', type=int, required=False, default=2, help='Number of epochs')
+    parser.add_argument('--batch_size', type=int, required=False, default=128, help='The batch_size')
 
     args = parser.parse_args()
 
@@ -42,7 +43,7 @@ def init_parser():
 
 def _setup_callback(args):
     # set up early stopping and storage of the best model
-    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.001, patience=5, verbose=False, mode="min")
+    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.001, patience=10, verbose=False, mode="min")
     best_checkpoint = ModelCheckpoint(monitor='val_loss', save_top_k=1, mode="min", dirpath="build_dimreduction/Data/chpts",
                                       filename=args.model + "_{epoch:02d}_{val_loss:.4f}", auto_insert_metric_name=True)
     lr_monitor = LearningRateMonitor(logging_interval='step')
@@ -62,7 +63,7 @@ def get_model(args,device):
     dataset = TripletSamplingDataset('prott5', args.input_folder,device=device)
     model = FF_Triplets(dataset=dataset, input_dim=1024, hidden_dim=512, output_dim=256, lr=args.lr, weight_decay=args.weight_decay,
                         sampling_threshold=0.5,
-                        batch_size=256)
+                        batch_size=args.batch_size)
     model.to(device)
     dataset.set_embedding_pairings(model.forward)
     return model

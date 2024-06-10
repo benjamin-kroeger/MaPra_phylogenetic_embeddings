@@ -80,9 +80,7 @@ class TripletSamplingDataset(Dataset):
         self.positive_embedd_pairs = None
         self.negative_embedd_pairs = None
 
-    def _compute_pos_neg_pairs(self, distance_matrix: np.array, desc=False):
-        positive_condition = ((distance_matrix < self.positive_threshold) & (distance_matrix > 0))
-        negative_condition = distance_matrix > self.negative_threshold
+    def _compute_pos_neg_pairs(self, distance_matrix: np.array, positive_condition: np.array, negative_condition: np.array, desc=False):
 
         postive_pairs = np.where(positive_condition)
         negative_pairs = np.where(negative_condition)
@@ -96,9 +94,27 @@ class TripletSamplingDataset(Dataset):
         # Order gt pairings in decending order
         # Positives: Most similar has smallest index
         # Negatives: Most similar has smallest index
-        self.positive_gt_pairs, self.negative_gt_pairs = self._compute_pos_neg_pairs(self.cophentic_distances, desc=True)
+        positive_condition = ((self.cophentic_distances < self.positive_threshold) & (self.cophentic_distances > 0))
+        negative_condition = self.cophentic_distances > self.negative_threshold
 
-    def set_embedding_pairings(self, model_forward):
+        self.positive_gt_pairs, self.negative_gt_pairs = self._compute_pos_neg_pairs(distance_matrix=self.cophentic_distances,
+                                                                                     positive_condition=positive_condition,
+                                                                                     negative_condition=negative_condition,
+                                                                                     desc=True)
+
+    def set_embedding_pairings(self, model_forward) -> dict:
+        """
+        This method computes positive and negative pairing embeddings for all pairings.
+        1. First all embeddings are generated
+        2. The cosine distance [0,2] is computed across all embeddings
+        3. The thresholds for want counts as pos and neg are computed
+        4. The distances and thresholds are passed of to pair finding
+        Args:
+            model_forward: A forward funtion of a model
+
+        Returns:
+            The sampling thresholds
+        """
         phy_embedds = []
         for prott5_embedd in self.prott5_embeddings:
             phy_embedds.append(model_forward(prott5_embedd.to(self.device)))
@@ -106,10 +122,33 @@ class TripletSamplingDataset(Dataset):
         norm_embeddings = F.normalize(torch.stack(phy_embedds), p=2, dim=1)
         embedding_space_dist = 1 - torch.mm(norm_embeddings, norm_embeddings.t()).data.cpu().numpy()
 
+        # define postive theshold dynamically
+        flat_dists = np.sort(embedding_space_dist.flatten())
+        # get the index of the 4000 smallest value
+        pos_threshold_index = 4000
+        zero_index = min(np.abs(flat_dists-1).argmin(),len(flat_dists)-2001)
+        neg_lower_index = zero_index - 2000
+        neg_upper_index = zero_index + 2000
+
+        pos_threshold = flat_dists[pos_threshold_index]
+        neg_lower_threshold = max(0.8,flat_dists[neg_lower_index])
+        neg_upper_threshold = min(1.2,flat_dists[neg_upper_index])
+
+
+        # define conditions on positive and negative pairs
+        positive_condition = embedding_space_dist > pos_threshold
+        negative_condition = ((embedding_space_dist < neg_upper_threshold) & (embedding_space_dist > neg_lower_threshold))
+
         # Order gt pairings in ascending order
         # Positives: Most similar has largest index
         # Negatives: Most similar has largest index
-        self.positive_embedd_pairs, self.negative_embedd_pairs = self._compute_pos_neg_pairs(embedding_space_dist)
+        self.positive_embedd_pairs, self.negative_embedd_pairs = self._compute_pos_neg_pairs(distance_matrix=embedding_space_dist,
+                                                                                             positive_condition=positive_condition,
+                                                                                             negative_condition=negative_condition)
+
+        return {"pos_embedd_threshold":pos_threshold,
+                "up_neg_embedd_threshold":neg_upper_threshold,
+                "low_neg_embedd_threshold":neg_lower_threshold}
 
     def set_thresholds(self, pos_threshold: float, neg_threshold: float):
         self.positive_threshold = pos_threshold
@@ -128,19 +167,25 @@ class TripletSamplingDataset(Dataset):
         if idx in self.positive_embedd_pairs.keys() and idx in self.positive_gt_pairs.keys():
             possible_pos_partners = np.stack(
                 np.intersect1d(self.positive_gt_pairs[idx], self.positive_embedd_pairs[idx], return_indices=True, assume_unique=True)).T
-            pos_diffs = np.abs(possible_pos_partners[:, 1] - possible_pos_partners[:, 2])
-            max_diff = np.argmax(pos_diffs)
-
-            positive_index = possible_pos_partners[max_diff, 0]
+            if possible_pos_partners.shape[0] > 0:
+                pos_diffs = np.abs(possible_pos_partners[:, 1] - possible_pos_partners[:, 2])
+                max_diff = np.argmax(pos_diffs)
+                positive_index = possible_pos_partners[max_diff, 0]
+            else:
+                positive_index = idx
         else:
-            positive_index = np.random.randint(0, self.cophentic_distances.shape[0])
+            # return the anchor so there is not difference and therefore no loss
+            positive_index = idx
 
         if idx in self.negative_embedd_pairs.keys() and idx in self.negative_gt_pairs.keys():
             possible_neg_partners = np.stack(
                 np.intersect1d(self.negative_gt_pairs[idx], self.negative_embedd_pairs[idx], return_indices=True, assume_unique=True)).T
-            neg_diffs = np.abs(possible_neg_partners[:, 1] - possible_neg_partners[:, 2])
-            max_diff = np.argmax(neg_diffs)
-            negative_index = possible_neg_partners[max_diff, 0]
+            if possible_neg_partners.shape[0] > 0:
+                neg_diffs = np.abs(possible_neg_partners[:, 1] - possible_neg_partners[:, 2])
+                max_diff = np.argmax(neg_diffs)
+                negative_index = possible_neg_partners[max_diff, 0]
+            else:
+                negative_index = np.random.randint(0, self.cophentic_distances.shape[0])
         else:
             negative_index = np.random.randint(0, self.cophentic_distances.shape[0])
 

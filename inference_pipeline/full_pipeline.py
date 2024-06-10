@@ -4,6 +4,7 @@ from glob import glob
 import torch
 from build_dimreduction.utils.get_raw_embeddings import ProtSeqEmbedder
 from build_dimreduction.models.ff_simple import FF_Simple
+from build_dimreduction.models.ff_triplets import FF_Triplets
 from inference_pipeline.embedding_distance_metrics import sim_scorer
 from evaluation_visualization.analysis_pipeline import analyse_distmaps
 import pandas as pd
@@ -29,7 +30,7 @@ def init_parser():
 
 
 def _dim_reduction(embeddings, args):
-    model = FF_Simple.load_from_checkpoint(args.checkpoint)
+    model = FF_Triplets.load_from_checkpoint(args.checkpoint)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
     embeddings = embeddings.to(device)

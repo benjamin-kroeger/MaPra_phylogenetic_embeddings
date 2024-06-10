@@ -40,8 +40,8 @@ class FF_Triplets(pl.LightningModule):
         negative_embeddings = self.ff_layer(negative)
 
         pos_cosine_similarity = 1 - F.cosine_similarity(anchor_embeddings, positive_embeddings, dim=-1)
-        # TODO adress neg use ABS values
-        neg_cosine_similarity = 1 + F.cosine_similarity(anchor_embeddings, negative_embeddings, dim=-1)
+        # I want that the cosine similiarity becomes 0
+        neg_cosine_similarity = torch.abs( F.cosine_similarity(anchor_embeddings, negative_embeddings, dim=-1))
         loss = pos_cosine_similarity.mean() + neg_cosine_similarity.mean()
 
         return loss
@@ -50,7 +50,8 @@ class FF_Triplets(pl.LightningModule):
         loss = self.computing_step(batch, batch_idx)
         self.log(name='train_loss', value=loss)
 
-        self.dataset.set_embedding_pairings(self.forward)
+        threshold_dict = self.dataset.set_embedding_pairings(self.forward)
+        self.log_dict(threshold_dict)
 
         return loss
 
