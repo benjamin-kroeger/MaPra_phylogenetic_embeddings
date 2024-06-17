@@ -8,7 +8,7 @@ from build_dimreduction.models.ff_triplets import FF_Triplets
 from inference_pipeline.embedding_distance_metrics import sim_scorer
 from evaluation_visualization.analysis_pipeline import analyse_distmaps
 import pandas as pd
-
+import numpy as np
 # 1. get prott5_embeddings
 # 2. load model
 # 3. compute dim reduction
@@ -58,7 +58,7 @@ def main(args):
 
     reduced_embeddings = _dim_reduction(torch.stack(embeddings), args).cpu().detach().numpy()
 
-    distance_matrix = sim_scorer.euclidean_distance(reduced_embeddings, reduced_embeddings)
+    distance_matrix = np.abs(sim_scorer.cosine_similarity(reduced_embeddings, reduced_embeddings))*10
 
     analyse_distmaps(distmap1_pred=pd.DataFrame(distance_matrix, index=ids, columns=ids), distmap2_truth=pd.read_csv(distance_path, index_col=0))
 
