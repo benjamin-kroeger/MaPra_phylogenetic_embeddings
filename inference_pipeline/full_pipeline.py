@@ -2,6 +2,8 @@ import argparse
 import os
 from glob import glob
 import torch
+from matplotlib import pyplot as plt
+
 from build_dimreduction.utils.get_raw_embeddings import ProtSeqEmbedder
 from build_dimreduction.models.ff_simple import FF_Simple
 from build_dimreduction.models.ff_triplets import FF_Triplets
@@ -9,6 +11,7 @@ from inference_pipeline.embedding_distance_metrics import sim_scorer
 from evaluation_visualization.analysis_pipeline import analyse_distmaps
 import pandas as pd
 import numpy as np
+import seaborn as sns
 # 1. get prott5_embeddings
 # 2. load model
 # 3. compute dim reduction
@@ -58,9 +61,18 @@ def main(args):
 
     reduced_embeddings = _dim_reduction(torch.stack(embeddings), args).cpu().detach().numpy()
 
-    distance_matrix = np.abs(sim_scorer.cosine_similarity(reduced_embeddings, reduced_embeddings))*10
+    #distance_matrix = 1- np.abs(sim_scorer.cosine_similarity(reduced_embeddings, reduced_embeddings))
+    distance_matrix = np.abs(sim_scorer.euclidean_distance(reduced_embeddings, reduced_embeddings))
+    distance_truth = pd.read_csv(distance_path, index_col=0)
 
-    analyse_distmaps(distmap1_pred=pd.DataFrame(distance_matrix, index=ids, columns=ids), distmap2_truth=pd.read_csv(distance_path, index_col=0))
+    ax = sns.heatmap(distance_matrix)
+    ax.set_title('Distance Matrix Pred')
+    plt.show()
+    ax = sns.heatmap(distance_truth)
+    ax.set_title('Distance matrix Truth')
+    plt.show()
+
+    analyse_distmaps(distmap1_pred=pd.DataFrame(distance_matrix, index=ids, columns=ids), distmap2_truth=distance_truth)
 
 
 if __name__ == '__main__':
