@@ -35,6 +35,10 @@ def init_parser():
     parser.add_argument('--acc_grad', type=bool, default=False)
     parser.add_argument('--epochs', type=int, required=False, default=2, help='Number of epochs')
     parser.add_argument('--batch_size', type=int, required=False, default=128, help='The batch_size')
+    parser.add_argument('--hidden_dim', type=int, required=False, default=128, help='The size of the hidden layer')
+    parser.add_argument('--output_dim', type=int, required=False, default=128, help='The size of the output layer')
+    parser.add_argument('--positive_threshold', type=float, required=False, default=0.7, help='The threshold for whats considered a positive')
+    parser.add_argument('--negative_threshold', type=float, required=False, default=1.1, help='The threshold for whats considered a negative')
 
     args = parser.parse_args()
 
@@ -43,7 +47,7 @@ def init_parser():
 
 def _setup_callback(args):
     # set up early stopping and storage of the best model
-    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.001, patience=10, verbose=False, mode="min")
+    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.0, patience=10, verbose=False, mode="min")
     best_checkpoint = ModelCheckpoint(monitor='val_loss', save_top_k=1, mode="min", dirpath="build_dimreduction/Data/chpts",
                                       filename=args.model + "_{epoch:02d}_{val_loss:.4f}", auto_insert_metric_name=True)
     lr_monitor = LearningRateMonitor(logging_interval='step')
@@ -57,12 +61,16 @@ def _setup_callback(args):
     return callbacks
 
 
-def get_model(args,device):
+def get_model(args, device):
     # model = globals()[args.model]()
     # init the model and send it to the device
-    dataset = TripletSamplingDataset('prott5', args.input_folder,device=device)
-    model = FF_Triplets(dataset=dataset, input_dim=1024, hidden_dim=512, output_dim=256, lr=args.lr, weight_decay=args.weight_decay,
-                        sampling_threshold=0.5,
+    dataset = TripletSamplingDataset('prott5', args.input_folder, device=device)
+    sns.displot(dataset.cophentic_distances.flatten())
+    plt.show()
+    model = FF_Triplets(dataset=dataset, input_dim=1024, hidden_dim=args.hidden_dim, output_dim=args.output_dim, lr=args.lr,
+                        weight_decay=args.weight_decay,
+                        postive_threshold=args.positive_threshold,
+                        negative_threshold=args.negative_threshold,
                         batch_size=args.batch_size)
     model.to(device)
     dataset.set_embedding_pairings(model.forward)
@@ -85,8 +93,7 @@ def main(args):
 
     # initialize 5 fold cross validation
     for fold in range(1):
-        model = get_model(args,device)
-
+        model = get_model(args, device)
 
         callbacks = _setup_callback(args)
         # set up a logger

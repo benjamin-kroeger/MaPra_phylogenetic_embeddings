@@ -6,6 +6,7 @@ import pandas as pd
 from evaluation_visualization.compute_distmap_metrics import DistmapMetrics
 from evaluation_visualization.tree_building import TreeBuilder
 from inference_pipeline.embedding_distance_metrics import sim_scorer
+from evaluation_visualization.clustering import get_umap
 
 logging.config.fileConfig(
     '/home/benjaminkroeger/Documents/Master/Master_3_Semester/MaPra/Learning_phy_distances/logging.config',
@@ -45,6 +46,8 @@ def analyse_distmaps(distmap1_pred: pd.DataFrame, distmap2_truth: pd.DataFrame):
     logger.debug('Initializing distmap visualization')
     distmap_visclust1 = TreeBuilder(distmap1_pred, is_truth=False)
     distmap_visclust2 = TreeBuilder(distmap2_truth, is_truth=True)
+
+    get_umap(distmap1_pred)
 
     logger.debug('Visualizing and scoring new representations')
     clustering_results = [

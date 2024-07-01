@@ -13,6 +13,7 @@ import seaborn as sns
 from ete4 import Tree
 from ete4.treeview import TreeStyle, NodeStyle, RectFace, add_face_to_node
 from scipy.spatial import distance
+from evaluation_visualization.utils import get_color
 
 # from umap import plot
 
@@ -21,29 +22,6 @@ logging.config.fileConfig(
     disable_existing_loggers=False)
 logger = logging.getLogger(__name__)
 
-color_palette = sns.color_palette("colorblind", 20)
-color_assignment = {}
-
-
-def get_color(familiy_name: str) -> str:
-    if familiy_name in color_assignment.keys():
-        return color_assignment[familiy_name]
-
-    new_color = color_palette[len(color_assignment)]
-    color_assignment[familiy_name] = '#{:02x}{:02x}{:02x}'.format(int(new_color[0]*255), int(new_color[1]*255), int(new_color[2]*255))
-
-    return color_assignment[familiy_name]
-
-
-def _square_to_lower_triangle(dist_square):
-    n = len(dist_square)
-    dist_lower_triangle = []
-    for i in range(n):
-        row = []
-        for j in range(i + 1):
-            row.append(dist_square[i][j])
-        dist_lower_triangle.append(row)
-    return dist_lower_triangle
 
 
 def layout(node):
@@ -156,17 +134,3 @@ class TreeBuilder:
 
         return t
 
-    def get_umap(self) -> np.array:
-        out_filepath = os.path.join(os.environ['OUTPUT_DIR'], f'Umap_{self.out_suffix}')
-
-        umap_calc = umap.UMAP(n_components=2, random_state=42, densmap=True, n_jobs=8,
-                              metric='precomputed',
-                              output_metric='euclidean')
-        umap_embedding = umap_calc.fit(self.distmap)
-        plot.points(umap_embedding)
-        plt.savefig(out_filepath)
-        distances_umap = distance.cdist(umap_embedding.embedding_, umap_embedding.embedding_, metric='euclidean')
-        return distances_umap, umap_embedding
-
-    def draw_tsne(self):
-        pass

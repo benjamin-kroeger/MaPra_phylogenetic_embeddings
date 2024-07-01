@@ -24,7 +24,7 @@ pyqt5-qt5 = "=5.15.2"
 pyqt5 = "=5.15.10"
 ete4 = {git = "https://github.com/etetoolkit/ete.git",branch="ete4"}
 
-# itol
+
 pyqt6 = "^6.6.1"
 biopython = "^1.83"
 umap = "^0.1.1"
@@ -39,6 +39,7 @@ lightning = "^2.2.3"
 seaborn = "^0.13.2"
 tensorboard = "^2.16.2"
 wandb = "^0.16.6"
+umap-learn = "^0.5.6"
 
 
 

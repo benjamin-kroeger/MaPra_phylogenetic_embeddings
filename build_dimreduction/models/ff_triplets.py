@@ -9,25 +9,28 @@ from matplotlib import pyplot as plt
 from torch import nn, optim
 
 from build_dimreduction.utils.seeding import seed_worker
+from build_dimreduction.datasets.collate_funcs import my_collate
 
 
 class FF_Triplets(pl.LightningModule):
 
     def __init__(self, dataset, input_dim: int, hidden_dim: int, output_dim: int, lr: float, weight_decay: float,
-                 sampling_threshold: float, non_linearity=nn.ReLU(), batch_size=32):
+                 postive_threshold: float, negative_threshold: float, non_linearity=nn.ReLU(), batch_size=32):
         super().__init__()
         self.save_hyperparameters()
 
         self.ff_layer = nn.Sequential(
-            nn.Linear(in_features=self.hparams.input_dim, out_features=self.hparams.hidden_dim),
-            self.hparams.non_linearity,
-            nn.Linear(in_features=self.hparams.hidden_dim, out_features=self.hparams.output_dim)
+            nn.Linear(in_features=input_dim, out_features=hidden_dim),
+            non_linearity,
+            nn.Linear(in_features=hidden_dim, out_features=hidden_dim),
+            non_linearity,
+            nn.Linear(in_features=hidden_dim, out_features=output_dim)
         )
         self.batch_size = batch_size
         self.validation_outputs = defaultdict(list)
 
         self.dataset = dataset
-        self.dataset.set_thresholds(pos_threshold=0.5,neg_threshold=1)
+        self.dataset.set_thresholds(pos_threshold=postive_threshold, neg_threshold=negative_threshold)
         self.dataset.set_gt_pairings()
 
     def forward(self, embeddings) -> Any:
@@ -42,15 +45,14 @@ class FF_Triplets(pl.LightningModule):
         positive_embeddings = self.ff_layer(positive)
         negative_embeddings = self.ff_layer(negative)
 
-        pos_cosine_dists = 1 - torch.abs(F.cosine_similarity(anchor_embeddings, positive_embeddings, dim=-1))
-        # I want that the cosine similiarity becomes 0
-        neg_cosine_dists = 1 - torch.abs(F.cosine_similarity(anchor_embeddings, negative_embeddings, dim=-1))
-        loss = pos_cosine_dists - neg_cosine_dists + 0.05
+        pos_cosine_dists = 1 - F.relu(F.cosine_similarity(anchor_embeddings, positive_embeddings, dim=-1))
+        neg_cosine_dists = 1 - F.relu(F.cosine_similarity(anchor_embeddings, negative_embeddings, dim=-1))
 
-        num_pos_loss = (loss > 1e-8).float().sum()
-        loss = loss.sum() / (num_pos_loss + 1e-8)
+        # Compute the triplet loss with margin
+        loss = torch.relu(pos_cosine_dists - neg_cosine_dists + 0.3)
 
-        return loss
+        # Average the loss over the batch
+        return loss.mean()
 
     def training_step(self, batch, batch_idx):
         loss = self.computing_step(batch, batch_idx)
@@ -81,10 +83,10 @@ class FF_Triplets(pl.LightningModule):
 
     def train_dataloader(self):
         return torch.utils.data.DataLoader(self.dataset, shuffle=False, batch_size=self.batch_size, pin_memory=True,
-                                           num_workers=1, worker_init_fn=seed_worker,
+                                           num_workers=1, worker_init_fn=seed_worker, collate_fn=my_collate,
                                            sampler=None)
 
     def val_dataloader(self):
         return torch.utils.data.DataLoader(self.dataset, shuffle=False, batch_size=self.batch_size, pin_memory=True,
-                                           num_workers=1, worker_init_fn=seed_worker,
-                                           sampler=None)
+                                           num_workers=1, worker_init_fn=seed_worker, collate_fn=my_collate,
+                                           sampler=None, )

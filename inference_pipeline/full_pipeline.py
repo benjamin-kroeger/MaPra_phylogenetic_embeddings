@@ -12,6 +12,8 @@ from evaluation_visualization.analysis_pipeline import analyse_distmaps
 import pandas as pd
 import numpy as np
 import seaborn as sns
+
+
 # 1. get prott5_embeddings
 # 2. load model
 # 3. compute dim reduction
@@ -24,7 +26,7 @@ def init_parser():
         description='Hyperparameters for Protein Prediction',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('--checkpoint', type=str, required=True, help='Path to the model checkpoint')
+    parser.add_argument('--checkpoint', type=str, required=False,default="newest", help='Path to the model checkpoint')
     parser.add_argument('--input', type=str, required=True, help='Path to the fasta file')
 
     args = parser.parse_args()
@@ -33,7 +35,10 @@ def init_parser():
 
 
 def _dim_reduction(embeddings, args):
-    model = FF_Triplets.load_from_checkpoint(args.checkpoint)
+    checkpoint_path = args.checkpoint
+    if args.checkpoint == "newest":
+        checkpoint_path = get_newest_file()
+    model = FF_Triplets.load_from_checkpoint(checkpoint_path)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
     embeddings = embeddings.to(device)
@@ -50,6 +55,23 @@ def get_input_data(path_to_input_folder: str) -> tuple[str, str]:
     distance_file = [x for x in files if x.endswith('.csv')][0]
 
     return fasta_file, distance_file
+
+
+def get_newest_file():
+    files = glob(
+        os.path.join("/home/benjaminkroeger/Documents/Master/Master_3_Semester/MaPra/Learning_phy_distances/build_dimreduction/Data/chpts", '*'))
+
+    # Filter out directories and get only files
+    files = [f for f in files if os.path.isfile(f)]
+
+    # Check if the list is not empty
+    if not files:
+        return None
+
+    # Get the newest file
+    newest_file = max(files, key=os.path.getmtime)
+
+    return newest_file
 
 
 def main(args):

@@ -96,6 +96,7 @@ class TripletSamplingDataset(Dataset):
         # get embedding data
         embedd_data = zip(*embedder.get_raw_embeddings(path_to_fasta))
         self.ids, self.prott5_embeddings = list(embedd_data)
+        self.prott5_embeddings = torch.stack(self.prott5_embeddings)
         self.device = device
 
         # compute ground truth distance matrix using cophentic distance matrix
@@ -244,6 +245,8 @@ class TripletSamplingDataset(Dataset):
         # The intersection between the 2 arrays is computed with np.1dintersect [intersecting_value,index in arr1, index in arr2]
         # Since the arrays are sorted in opposite direction the value where the distance of indices is the largest is the hardest value
 
+        leway = 15
+
         if idx in self.positive_embedd_pairs.keys() and idx in self.positive_gt_pairs.keys():
             # intersect the pairs arrays
             possible_pos_partners = np.stack(
@@ -253,33 +256,40 @@ class TripletSamplingDataset(Dataset):
                 # get the differences in indices
                 pos_diffs = possible_pos_partners[:, 1] - possible_pos_partners[:, 2]
                 # get the index of the hardest value
-                max_diff_index = np.argmin(pos_diffs)
-                positive_index = possible_pos_partners[max_diff_index, 0]
+                max_diff_indices = np.argsort(pos_diffs)[:leway]
+                positive_indices = possible_pos_partners[max_diff_indices, 0]
             else:
-                positive_index = idx
+                positive_indices = np.array([idx])
         else:
             # return the anchor so there is not difference and therefore no loss
-            positive_index = idx
+            positive_indices = np.array([idx])
+
 
         if idx in self.negative_embedd_pairs.keys() and idx in self.negative_gt_pairs.keys():
             possible_neg_partners = np.stack(
                 np.intersect1d(self.negative_gt_pairs[idx], self.negative_embedd_pairs[idx], return_indices=True, assume_unique=True)).T
             if possible_neg_partners.shape[0] > 0:
                 neg_diffs = possible_neg_partners[:, 1] - possible_neg_partners[:, 2]
-                max_diff_index = np.argmax(neg_diffs)
-                negative_index = possible_neg_partners[max_diff_index, 0]
+                max_diff_indices = np.argsort(neg_diffs)[-leway:]
+                negative_indices = possible_neg_partners[max_diff_indices, 0]
             else:
-                negative_index = self.negative_gt_pairs[idx][0]
+                negative_indices = np.array(self.negative_gt_pairs[idx][0])
 
         else:
-            negative_index = self.negative_gt_pairs[idx][0]
+            negative_indices = np.array(self.negative_gt_pairs[idx][0])
 
-        sampled_triplets.append((idx, positive_index, negative_index))
+        min_samples_found = min([len(positive_indices),len(negative_indices)])
+
+        anchor_indices = np.array([idx]*min_samples_found)
+        positive_indices = positive_indices[:min_samples_found]
+        negative_indices = negative_indices[:min_samples_found]
+
+        sampled_triplets.extend(np.stack((anchor_indices,positive_indices,negative_indices)).T.tolist())
 
         sample = torch.stack(
-            [self.prott5_embeddings[idx][None, :],
-             self.prott5_embeddings[positive_index][None, :],
-             self.prott5_embeddings[negative_index][None, :]], dim=0
+            [self.prott5_embeddings[anchor_indices],
+             self.prott5_embeddings[positive_indices],
+             self.prott5_embeddings[negative_indices]], dim=1
         )
 
         return sample
