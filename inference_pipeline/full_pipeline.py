@@ -1,17 +1,19 @@
 import argparse
 import os
 from glob import glob
+
+import numpy as np
+import pandas as pd
+import seaborn as sns
 import torch
 from matplotlib import pyplot as plt
-
-from build_dimreduction.utils.get_raw_embeddings import ProtSeqEmbedder
-from build_dimreduction.models.ff_simple import FF_Simple
+import torch.nn.functional as F
+from build_dimreduction.datasets.triplet_sampling_dataset import TripletSamplingDataset
 from build_dimreduction.models.ff_triplets import FF_Triplets
-from inference_pipeline.embedding_distance_metrics import sim_scorer
+from build_dimreduction.utils.get_raw_embeddings import ProtSeqEmbedder
+from build_dimreduction.utils.seeding import get_input_data
 from evaluation_visualization.analysis_pipeline import analyse_distmaps
-import pandas as pd
-import numpy as np
-import seaborn as sns
+from inference_pipeline.embedding_distance_metrics import sim_scorer
 
 
 # 1. get prott5_embeddings
@@ -26,7 +28,7 @@ def init_parser():
         description='Hyperparameters for Protein Prediction',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('--checkpoint', type=str, required=False,default="newest", help='Path to the model checkpoint')
+    parser.add_argument('--checkpoint', type=str, required=False, default="newest", help='Path to the model checkpoint')
     parser.add_argument('--input', type=str, required=True, help='Path to the fasta file')
 
     args = parser.parse_args()
@@ -45,16 +47,6 @@ def _dim_reduction(embeddings, args):
     reduced = model(embeddings)
 
     return reduced
-
-
-def get_input_data(path_to_input_folder: str) -> tuple[str, str]:
-    assert os.path.isdir(path_to_input_folder), 'Path does not exist!'
-
-    files = glob(os.path.join(path_to_input_folder, '*'))
-    fasta_file = [x for x in files if x.endswith('.fasta')][0]
-    distance_file = [x for x in files if x.endswith('.csv')][0]
-
-    return fasta_file, distance_file
 
 
 def get_newest_file():
@@ -81,10 +73,13 @@ def main(args):
     embedd_data = zip(*embedder.get_raw_embeddings(fasta_path))
     ids, embeddings = list(embedd_data)
 
-    reduced_embeddings = _dim_reduction(torch.stack(embeddings), args).cpu().detach().numpy()
+    reduced_embeddings = _dim_reduction(torch.stack(embeddings), args)
 
-    #distance_matrix = 1- np.abs(sim_scorer.cosine_similarity(reduced_embeddings, reduced_embeddings))
-    distance_matrix = np.abs(sim_scorer.euclidean_distance(reduced_embeddings, reduced_embeddings))
+    # distance_matrix = 1- np.abs(sim_scorer.cosine_similarity(reduced_embeddings, reduced_embeddings))
+    distance_matrix = np.abs(sim_scorer.euclidean_distance(reduced_embeddings.data.cpu().numpy(), reduced_embeddings.data.cpu().numpy()))
+    #norm_embeddings = F.normalize(reduced_embeddings, p=2, dim=1)
+    #distance_matrix = 1 - F.relu(torch.mm(norm_embeddings, norm_embeddings.t())).data.cpu().numpy()
+    #distance_matrix[distance_matrix < 0] = 0
     distance_truth = pd.read_csv(distance_path, index_col=0)
 
     ax = sns.heatmap(distance_matrix)

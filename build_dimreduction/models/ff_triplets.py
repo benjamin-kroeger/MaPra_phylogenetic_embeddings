@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Any
+from typing import Any, Dict
 import seaborn as sns
 import pytorch_lightning as pl
 import torch
@@ -10,12 +10,14 @@ from torch import nn, optim
 
 from build_dimreduction.utils.seeding import seed_worker
 from build_dimreduction.datasets.collate_funcs import my_collate
+from build_dimreduction.utils.triplet_mining import set_embedding_pairings
+from build_dimreduction.datasets.triplet_sampling_dataset import TripletSamplingDataset
 
 
 class FF_Triplets(pl.LightningModule):
 
-    def __init__(self, dataset, input_dim: int, hidden_dim: int, output_dim: int, lr: float, weight_decay: float,
-                 postive_threshold: float, negative_threshold: float, non_linearity=nn.ReLU(), batch_size=32):
+    def __init__(self, dataset: TripletSamplingDataset, input_dim: int, hidden_dim: int, output_dim: int, lr: float, weight_decay: float,
+                 postive_threshold: float, negative_threshold: float, non_linearity=nn.ReLU(), batch_size=32,leeway=1):
         super().__init__()
         self.save_hyperparameters()
 
@@ -30,7 +32,7 @@ class FF_Triplets(pl.LightningModule):
         self.validation_outputs = defaultdict(list)
 
         self.dataset = dataset
-        self.dataset.set_thresholds(pos_threshold=postive_threshold, neg_threshold=negative_threshold)
+        self.dataset.set_constants(pos_threshold=postive_threshold, neg_threshold=negative_threshold,leeway=leeway)
         self.dataset.set_gt_pairings()
 
     def forward(self, embeddings) -> Any:
@@ -45,11 +47,13 @@ class FF_Triplets(pl.LightningModule):
         positive_embeddings = self.ff_layer(positive)
         negative_embeddings = self.ff_layer(negative)
 
-        pos_cosine_dists = 1 - F.relu(F.cosine_similarity(anchor_embeddings, positive_embeddings, dim=-1))
-        neg_cosine_dists = 1 - F.relu(F.cosine_similarity(anchor_embeddings, negative_embeddings, dim=-1))
+        pos_cosine_dists = 1 - F.cosine_similarity(anchor_embeddings, positive_embeddings, dim=-1)
+        neg_cosine_dists = 1 - F.cosine_similarity(anchor_embeddings, negative_embeddings, dim=-1)
 
         # Compute the triplet loss with margin
         loss = torch.relu(pos_cosine_dists - neg_cosine_dists + 0.3)
+
+        set_embedding_pairings(self.dataset.prott5_embeddings, self.forward, self.device)
 
         # Average the loss over the batch
         return loss.mean()
@@ -69,10 +73,11 @@ class FF_Triplets(pl.LightningModule):
         self.log('val_loss', torch.tensor(self.validation_outputs['val_loss']).mean())
 
         if self.current_epoch % 10 == 0:
-            ax = sns.heatmap(self.dataset.compute_embedding_distances(self.forward))
+            ax = sns.heatmap(self.dataset.embedding_space_distances)
             ax.set_title(f'Distance Matrix Pred {self.current_epoch}')
             plt.show()
-            self.dataset.polt_triplet_sampling()
+            self.dataset.polt_triplet_sampling(epoch=self.current_epoch, input_type='gt')
+            self.dataset.polt_triplet_sampling(epoch=self.current_epoch)
 
     def configure_optimizers(self):
         optimizer = optim.AdamW(self.parameters(), lr=self.hparams.lr, weight_decay=self.hparams.weight_decay)
@@ -82,11 +87,18 @@ class FF_Triplets(pl.LightningModule):
         return [optimizer]  # , [lr_scheduler]
 
     def train_dataloader(self):
-        return torch.utils.data.DataLoader(self.dataset, shuffle=False, batch_size=self.batch_size, pin_memory=True,
-                                           num_workers=1, worker_init_fn=seed_worker, collate_fn=my_collate,
+        return torch.utils.data.DataLoader(self.dataset, shuffle=True, batch_size=self.batch_size, pin_memory=True,
+                                           num_workers=8, worker_init_fn=seed_worker, collate_fn=my_collate,
                                            sampler=None)
 
     def val_dataloader(self):
         return torch.utils.data.DataLoader(self.dataset, shuffle=False, batch_size=self.batch_size, pin_memory=True,
-                                           num_workers=1, worker_init_fn=seed_worker, collate_fn=my_collate,
+                                           num_workers=8, worker_init_fn=seed_worker, collate_fn=my_collate,
                                            sampler=None, )
+
+    def on_save_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
+        self.dataset.serialize_for_storage()
+    def on_train_epoch_start(self) -> None:
+        self.dataset.set_shared_resources()
+
+

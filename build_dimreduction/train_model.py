@@ -1,20 +1,17 @@
 import argparse
-import os
 from datetime import datetime
-import torch.nn.functional as F
-import numpy as np
+
+import matplotlib.pyplot as plt
+import pytorch_lightning as pl
+import seaborn as sns
 import torch
+import wandb
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint, GradientAccumulationScheduler, LearningRateMonitor
 from pytorch_lightning.loggers import WandbLogger
 
-from build_dimreduction.datasets.sampling_dataset import SamplingDataset
-from models.ff_simple import FF_Simple
-from models.ff_triplets import FF_Triplets
 from build_dimreduction.datasets.triplet_sampling_dataset import TripletSamplingDataset
-import pytorch_lightning as pl
-import wandb
-import seaborn as sns
-import matplotlib.pyplot as plt
+from build_dimreduction.utils.triplet_mining import set_embedding_pairings
+from models.ff_triplets import FF_Triplets
 
 
 def init_parser():
@@ -30,6 +27,7 @@ def init_parser():
     parser.add_argument('--half_precision', action='store_true', default=False, help='Train the model with torch.float16 instead of torch.float32')
     parser.add_argument('--cpu_only', action='store_true', default=False, help='If the GPU is to WEAK use cpu only')
     parser.add_argument('--model', type=str, required=False, default='ff_triplets')
+
     parser.add_argument('--lr', type=float, required=False, default=1e-3, help='Learning rate')
     parser.add_argument('--weight_decay', type=float, required=False, default=1e-3, help='Weight decay')
     parser.add_argument('--acc_grad', type=bool, default=False)
@@ -39,6 +37,7 @@ def init_parser():
     parser.add_argument('--output_dim', type=int, required=False, default=128, help='The size of the output layer')
     parser.add_argument('--positive_threshold', type=float, required=False, default=0.7, help='The threshold for whats considered a positive')
     parser.add_argument('--negative_threshold', type=float, required=False, default=1.1, help='The threshold for whats considered a negative')
+    parser.add_argument('--leeway', type=int, required=False, default=1, help='How lax the sampling shall be')
 
     args = parser.parse_args()
 
@@ -47,7 +46,7 @@ def init_parser():
 
 def _setup_callback(args):
     # set up early stopping and storage of the best model
-    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.0, patience=10, verbose=False, mode="min")
+    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.005, patience=10, verbose=False, mode="min")
     best_checkpoint = ModelCheckpoint(monitor='val_loss', save_top_k=1, mode="min", dirpath="build_dimreduction/Data/chpts",
                                       filename=args.model + "_{epoch:02d}_{val_loss:.4f}", auto_insert_metric_name=True)
     lr_monitor = LearningRateMonitor(logging_interval='step')
@@ -73,7 +72,7 @@ def get_model(args, device):
                         negative_threshold=args.negative_threshold,
                         batch_size=args.batch_size)
     model.to(device)
-    dataset.set_embedding_pairings(model.forward)
+    set_embedding_pairings(dataset.prott5_embeddings,model.forward,device)
     return model
 
 
