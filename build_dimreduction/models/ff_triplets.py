@@ -10,7 +10,7 @@ from torch import nn, optim
 
 from build_dimreduction.utils.seeding import seed_worker
 from build_dimreduction.datasets.collate_funcs import my_collate
-from build_dimreduction.utils.triplet_mining import set_embedding_pairings
+from build_dimreduction.utils.triplet_mining import set_per_dataname_pairings, set_embedding_pairings
 from build_dimreduction.datasets.triplet_sampling_dataset import TripletSamplingDataset
 
 
@@ -53,7 +53,7 @@ class FF_Triplets(pl.LightningModule):
         # Compute the triplet loss with margin
         loss = torch.relu(pos_cosine_dists - neg_cosine_dists + 0.3)
 
-        set_embedding_pairings(self.dataset.prott5_embeddings, self.forward, self.device)
+        set_embedding_pairings(self.dataset, self.forward, self.device)
 
         # Average the loss over the batch
         return loss.mean()
@@ -73,10 +73,7 @@ class FF_Triplets(pl.LightningModule):
         self.log('val_loss', torch.tensor(self.validation_outputs['val_loss']).mean())
 
         if self.current_epoch % 10 == 0:
-            ax = sns.heatmap(self.dataset.embedding_space_distances)
-            ax.set_title(f'Distance Matrix Pred {self.current_epoch}')
-            plt.show()
-            self.dataset.polt_triplet_sampling(epoch=self.current_epoch, input_type='gt')
+            self.dataset.plot_distance_maps(distance_type='embedd',mode='distances')
             self.dataset.polt_triplet_sampling(epoch=self.current_epoch)
 
     def configure_optimizers(self):

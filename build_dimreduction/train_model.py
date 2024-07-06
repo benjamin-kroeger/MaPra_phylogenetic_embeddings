@@ -10,7 +10,7 @@ from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint, Gradient
 from pytorch_lightning.loggers import WandbLogger
 
 from build_dimreduction.datasets.triplet_sampling_dataset import TripletSamplingDataset
-from build_dimreduction.utils.triplet_mining import set_embedding_pairings
+from build_dimreduction.utils.triplet_mining import set_per_dataname_pairings, set_embedding_pairings
 from models.ff_triplets import FF_Triplets
 
 
@@ -21,7 +21,7 @@ def init_parser():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     # Performance related arguments
-    parser.add_argument('--input_folder', type=str, required=True, help='Path to input folder')
+    parser.add_argument('--input_folder', type=str,nargs='+', required=True, help='Path to input folder')
     parser.add_argument('--num_workers', type=int, required=False, default=8,
                         help='CPU Cores')
     parser.add_argument('--half_precision', action='store_true', default=False, help='Train the model with torch.float16 instead of torch.float32')
@@ -35,8 +35,8 @@ def init_parser():
     parser.add_argument('--batch_size', type=int, required=False, default=128, help='The batch_size')
     parser.add_argument('--hidden_dim', type=int, required=False, default=128, help='The size of the hidden layer')
     parser.add_argument('--output_dim', type=int, required=False, default=128, help='The size of the output layer')
-    parser.add_argument('--positive_threshold', type=float, required=False, default=0.7, help='The threshold for whats considered a positive')
-    parser.add_argument('--negative_threshold', type=float, required=False, default=1.1, help='The threshold for whats considered a negative')
+    parser.add_argument('--positive_threshold', type=float, required=False, default=0.3, help='The threshold for whats considered a positive')
+    parser.add_argument('--negative_threshold', type=float, required=False, default=0.7, help='The threshold for whats considered a negative')
     parser.add_argument('--leeway', type=int, required=False, default=1, help='How lax the sampling shall be')
 
     args = parser.parse_args()
@@ -64,15 +64,13 @@ def get_model(args, device):
     # model = globals()[args.model]()
     # init the model and send it to the device
     dataset = TripletSamplingDataset('prott5', args.input_folder, device=device)
-    sns.displot(dataset.cophentic_distances.flatten())
-    plt.show()
     model = FF_Triplets(dataset=dataset, input_dim=1024, hidden_dim=args.hidden_dim, output_dim=args.output_dim, lr=args.lr,
                         weight_decay=args.weight_decay,
                         postive_threshold=args.positive_threshold,
                         negative_threshold=args.negative_threshold,
                         batch_size=args.batch_size)
     model.to(device)
-    set_embedding_pairings(dataset.prott5_embeddings,model.forward,device)
+    set_embedding_pairings(dataset, model.forward, device)
     return model
 
 

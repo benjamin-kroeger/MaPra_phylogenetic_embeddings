@@ -6,23 +6,23 @@ import torch.nn.functional as F
 
 # Initialize sampled_triplets as a multiprocessing list outside the class
 manager = multiprocessing.Manager()
-sampled_triplets = manager.list()
-embedding_distances = multiprocessing.Array('d', 437*437)
-pos_embedd_pairings = manager.dict()
-neg_embedd_pairings = manager.dict()
-pairing_access_lock = manager.Lock()
+sampled_triplets = {}
+multi_embedding_distances = {}
+pos_embedd_pairings = {}
+neg_embedd_pairings = {}
+pairing_access_locks = {}
 
 
-def compute_embedding_distances(embeddings_tensor, model_forward,model_device):
+def compute_embedding_distances(embeddings_tensor, model_forward, model_device):
     # compute distances on all embeddings
     phy_embedds = []
     batch_size = 100
-    for index in range(0,embeddings_tensor.shape[0],batch_size):
-        phy_embedds.append(model_forward(embeddings_tensor[index:index+batch_size,:].to(model_device)))
+    for index in range(0, embeddings_tensor.shape[0], batch_size):
+        phy_embedds.append(model_forward(embeddings_tensor[index:index + batch_size, :].to(model_device)))
 
-    norm_embeddings = F.normalize(torch.cat(phy_embedds,dim=0), p=2, dim=1)
+    norm_embeddings = F.normalize(torch.cat(phy_embedds, dim=0), p=2, dim=1)
     # embedding_space_dist = 1 - F.relu(torch.mm(norm_embeddings, norm_embeddings.t())).data.cpu().numpy() # any value lower 0 is 0
-    embedding_space_dist = 1 - torch.mm(norm_embeddings, norm_embeddings.t()).data.cpu().numpy() # allow for more range in similarity
+    embedding_space_dist = 1 - torch.mm(norm_embeddings, norm_embeddings.t()).data.cpu().numpy()  # allow for more range in similarity
     return embedding_space_dist
 
 
@@ -105,7 +105,7 @@ def compute_pos_neg_pairs(distance_matrix: np.array, positive_condition: np.arra
     return pos_pairings, neg_pairings
 
 
-def set_embedding_pairings(embedding_tensor, model_forward,device):
+def set_per_dataname_pairings(data_name, embedding_tensor, model_forward, device):
     """
     This method computes positive and negative pairing embeddings for all pairings.
     1. First all embeddings are generated
@@ -113,31 +113,37 @@ def set_embedding_pairings(embedding_tensor, model_forward,device):
     3. The thresholds for want counts as pos and neg are computed
     4. The distances and thresholds are passed of to pair finding
     Args:
+        data_name:
         embedding_tensor:
         model_forward: A forward funtion of a model
 
 
     """
 
-    global embedding_distances
+    global multi_embedding_distances
     global pos_embedd_pairings
     global neg_embedd_pairings
-    global pairing_access_lock
-    embedding_space_dist = compute_embedding_distances(embeddings_tensor=embedding_tensor, model_forward=model_forward,model_device=device)
+    global pairing_access_locks
+    embedding_space_dist = compute_embedding_distances(embeddings_tensor=embedding_tensor, model_forward=model_forward, model_device=device)
 
     # Ensure the shared array is resized properly
-    np.frombuffer(embedding_distances.get_obj(), dtype=np.float64)[:] = embedding_space_dist.ravel()
+    np.frombuffer(multi_embedding_distances[data_name].get_obj(), dtype=np.float64)[:] = embedding_space_dist.ravel()
 
     positive_condition = np.ones(shape=embedding_space_dist.shape, dtype=bool)
     np.fill_diagonal(positive_condition, False)
-
 
     pos, neg = compute_pos_neg_pairs(distance_matrix=embedding_space_dist,
                                      positive_condition=positive_condition,
                                      negative_condition=np.ones(shape=embedding_space_dist.shape, dtype=bool),
                                      desc=False)
-    with pairing_access_lock:
-        pos_embedd_pairings.clear()
-        pos_embedd_pairings.update(pos)
-        neg_embedd_pairings.clear()
-        neg_embedd_pairings.update(neg)
+    with pairing_access_locks[data_name]:
+        pos_embedd_pairings[data_name].clear()
+        pos_embedd_pairings[data_name].update(pos)
+        neg_embedd_pairings[data_name].clear()
+        neg_embedd_pairings[data_name].update(neg)
+
+
+def set_embedding_pairings(dataset, model_forward, device):
+    for data_name in dataset.prott5_embeddings.keys():
+        embedding_tensor = dataset.prott5_embeddings[data_name]
+        set_per_dataname_pairings(data_name, embedding_tensor, model_forward, device)
