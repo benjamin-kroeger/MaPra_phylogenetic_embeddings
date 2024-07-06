@@ -21,7 +21,7 @@ logging.config.fileConfig(
     '/home/benjaminkroeger/Documents/Master/Master_3_Semester/MaPra/Learning_phy_distances/logging.config',
     disable_existing_loggers=False)
 logger = logging.getLogger(__name__)
-
+scalar = 20
 
 
 def layout(node):
@@ -37,7 +37,7 @@ def layout(node):
 
         # Creates a RectFace that will be drawn with the "aligned" option in
         color = get_color(node.name.split('_')[-1])
-        color_face = RectFace(20, 10, color, color)  # Change the color as needed
+        color_face = RectFace(20*scalar, 10*scalar, color, color)  # Change the color as needed
         add_face_to_node(color_face, node, column=1, aligned=True)
     else:
 

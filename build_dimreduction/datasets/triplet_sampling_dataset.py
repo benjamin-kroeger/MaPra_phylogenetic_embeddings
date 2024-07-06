@@ -86,7 +86,6 @@ class TripletSamplingDataset(Dataset):
         self.negative_gt_pairs = {}
 
         self.plot_distance_maps(distance_type='cophentic')
-        self.plot_distance_maps(distance_type='cophentic', mode='dist')
 
     def set_gt_pairings(self):
         """
@@ -357,6 +356,8 @@ class TripletSamplingDataset(Dataset):
                 sns.heatmap(map_type[key], ax=axs[i])
             elif mode == 'dist':
                 sns.histplot(map_type[key].flatten(), ax=axs[i])
+                axs[i].axvline(x=self.positive_threshold, color='r', linestyle='--')
+                axs[i].axvline(x=self.negative_threshold, color='r', linestyle='--')
 
             if epoch is not None:
                 axs[i].set_title(f'{key} epoch:{epoch}')

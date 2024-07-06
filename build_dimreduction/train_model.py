@@ -35,7 +35,7 @@ def init_parser():
     parser.add_argument('--batch_size', type=int, required=False, default=128, help='The batch_size')
     parser.add_argument('--hidden_dim', type=int, required=False, default=128, help='The size of the hidden layer')
     parser.add_argument('--output_dim', type=int, required=False, default=128, help='The size of the output layer')
-    parser.add_argument('--positive_threshold', type=float, required=False, default=0.3, help='The threshold for whats considered a positive')
+    parser.add_argument('--positive_threshold', type=float, required=False, default=0.4, help='The threshold for whats considered a positive')
     parser.add_argument('--negative_threshold', type=float, required=False, default=0.7, help='The threshold for whats considered a negative')
     parser.add_argument('--leeway', type=int, required=False, default=1, help='How lax the sampling shall be')
 
@@ -46,7 +46,7 @@ def init_parser():
 
 def _setup_callback(args):
     # set up early stopping and storage of the best model
-    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.005, patience=10, verbose=False, mode="min")
+    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.005, patience=100, verbose=False, mode="min")
     best_checkpoint = ModelCheckpoint(monitor='val_loss', save_top_k=1, mode="min", dirpath="build_dimreduction/Data/chpts",
                                       filename=args.model + "_{epoch:02d}_{val_loss:.4f}", auto_insert_metric_name=True)
     lr_monitor = LearningRateMonitor(logging_interval='step')
