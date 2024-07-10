@@ -45,15 +45,26 @@ def init_parser():
 
 
 def _setup_callback(args):
+    """
+    Sets up callbacks for training
+    Args:
+        args:
+
+    Returns:
+         A list of callbacks for training
+    """
     # set up early stopping and storage of the best model
-    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.005, patience=100, verbose=False, mode="min")
+    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.005, patience=10, verbose=False, mode="min")
+    # set up storage of the best checkpoint path
     best_checkpoint = ModelCheckpoint(monitor='val_loss', save_top_k=1, mode="min", dirpath="build_dimreduction/Data/chpts",
                                       filename=args.model + "_{epoch:02d}_{val_loss:.4f}", auto_insert_metric_name=True)
+    # set up lr monitor for future
     lr_monitor = LearningRateMonitor(logging_interval='step')
 
     callbacks = [early_stop_callback, lr_monitor, best_checkpoint]
 
     if args.acc_grad:
+        # if needed gradient accumulation can be used
         accumulator = GradientAccumulationScheduler(scheduling={0: args.acc_grad})
         callbacks.append(accumulator)
 
@@ -61,9 +72,9 @@ def _setup_callback(args):
 
 
 def get_model(args, device):
-    # model = globals()[args.model]()
-    # init the model and send it to the device
+    # init dataset
     dataset = TripletSamplingDataset('prott5', args.input_folder, device=device)
+    # init model
     model = FF_Triplets(dataset=dataset, input_dim=1024, hidden_dim=args.hidden_dim, output_dim=args.output_dim, lr=args.lr,
                         weight_decay=args.weight_decay,
                         postive_threshold=args.positive_threshold,

@@ -14,7 +14,7 @@ import torch
 from ete4 import Tree
 from torch.utils.data import Dataset
 
-from build_dimreduction.utils.get_raw_embeddings import ProtSeqEmbedder
+from build_dimreduction.utils.ProtSeqEmbedder import ProtSeqEmbedder
 from build_dimreduction.utils.seeding import get_input_data, zscore_normalize
 from evaluation_visualization.analysis_pipeline import _convert_to_full
 from evaluation_visualization.tree_building import TreeBuilder
@@ -29,6 +29,9 @@ logger = logging.getLogger(__name__)
 
 
 class TripletSamplingDataset(Dataset):
+    """
+    This dataset creates triplets given a groundtruth matrix
+    """
 
     def __init__(self, model: Literal['prott5', 'esm'], paths_to_input_data: list[str], device):
         self.ids = {}

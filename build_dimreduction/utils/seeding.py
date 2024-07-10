@@ -7,6 +7,9 @@ import torch
 
 
 def seed_worker(worker_id):
+    """
+    Seed the dataloader for reproducibility.
+    """
     worker_seed = torch.initial_seed() % 2 ** 32
     np.random.seed(worker_seed)
     random.seed(worker_seed)

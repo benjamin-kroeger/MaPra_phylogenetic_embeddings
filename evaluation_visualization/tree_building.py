@@ -37,7 +37,7 @@ def layout(node):
 
         # Creates a RectFace that will be drawn with the "aligned" option in
         color = get_color(node.name.split('_')[-1])
-        color_face = RectFace(20*scalar, 10*scalar, color, color)  # Change the color as needed
+        color_face = RectFace(20 * scalar, 10 * scalar, color, color)  # Change the color as needed
         add_face_to_node(color_face, node, column=1, aligned=True)
     else:
 
@@ -48,12 +48,16 @@ def layout(node):
 class TreeBuilder:
     family_map = defaultdict()
 
-    def __init__(self, distmap: pd.DataFrame, is_truth: bool, output_file_suffix: str = '') -> None:
-        self.distmap = distmap.values
-        self.out_suffix = 'truth' if is_truth else 'pred' + output_file_suffix
-        self.names = list(distmap.columns)
+    def __init__(self, distmap: pd.DataFrame = None, tree_data: str = None, is_truth: bool = True, output_file_suffix: str = '') -> None:
+        assert (distmap is None and tree_data is None), "Either a distmap or a tree_data must be provided"
+        assert (distmap is not None or tree_data is not None), "Distmap  and tree_data are mutually exclusive"
 
-        assert len(self.names) == distmap.shape[0] == distmap.shape[1]
+        if distmap is not None:
+            self.distmap = distmap.values
+            self.names = list(distmap.columns)
+            assert len(self.names) == distmap.shape[0] == distmap.shape[1]
+
+        self.out_suffix = 'truth' if is_truth else 'pred' + output_file_suffix
 
     def get_tree(self) -> tuple[np.array, Tree]:
         """
@@ -73,7 +77,7 @@ class TreeBuilder:
         logger.debug(f'Writing newick to {newick_filepath}')
         with open(newick_filepath, 'w') as file:
             file.write(tree_data)
-        tree = self._draw_tree(out_filepath, tree_data)
+        tree = self.draw_tree(out_filepath, tree_data)
 
         return np.array(tree.cophenetic_matrix()[0]), tree
 
@@ -109,7 +113,7 @@ class TreeBuilder:
         distmap_phylibfile.flush()
         return distmap_phylibfile
 
-    def _draw_tree(self, out_filepath: str, tree_data: str) -> Tree:
+    def draw_tree(self, out_filepath: str, tree_data: str) -> Tree:
         """
         Draw the tree using ete4 and save the tree to disk.
         Args:
@@ -133,4 +137,3 @@ class TreeBuilder:
         t.render(tree_vis_path, w=1000, units='mm', tree_style=circular_style)
 
         return t
-
