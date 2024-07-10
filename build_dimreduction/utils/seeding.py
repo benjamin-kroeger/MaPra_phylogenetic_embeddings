@@ -16,13 +16,22 @@ def seed_worker(worker_id):
 
 
 def get_input_data(path_to_input_folder: str) -> tuple[str, str]:
+    """
+    Get the important gt files from the input folder.
+    Args:
+        path_to_input_folder: Path to input folder.
+
+    Returns:
+        Fasta file path and newick file path
+
+    """
     assert os.path.isdir(path_to_input_folder), 'Path does not exist!'
 
     files = glob(os.path.join(path_to_input_folder, '*'))
     fasta_file = [x for x in files if x.endswith('.fasta')][0]
-    distance_file = [x for x in files if x.endswith('.csv')][0]
+    newickfile = [x for x in files if x.endswith('.nw')][0]
 
-    return fasta_file, distance_file
+    return fasta_file, newickfile
 
 
 def zscore_normalize(data):

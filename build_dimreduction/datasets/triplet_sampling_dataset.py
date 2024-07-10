@@ -16,7 +16,7 @@ from torch.utils.data import Dataset
 
 from build_dimreduction.utils.ProtSeqEmbedder import ProtSeqEmbedder
 from build_dimreduction.utils.seeding import get_input_data, zscore_normalize
-from evaluation_visualization.analysis_pipeline import _convert_to_full
+from evaluation_visualization.utils import convert_to_full
 from evaluation_visualization.tree_building import TreeBuilder
 
 from build_dimreduction.utils.triplet_mining import compute_pos_neg_pairs, multi_embedding_distances, neg_embedd_pairings, pos_embedd_pairings, \
@@ -33,6 +33,8 @@ class TripletSamplingDataset(Dataset):
     This dataset creates triplets given a groundtruth matrix
     """
 
+
+    # TODO switch to input of tree data not distance matrix work with gt trees not distances
     def __init__(self, model: Literal['prott5', 'esm'], paths_to_input_data: list[str], device):
         self.ids = {}
         self.prott5_embeddings = {}
@@ -46,9 +48,9 @@ class TripletSamplingDataset(Dataset):
         for input_data_path in paths_to_input_data:
             data_name = input_data_path.split('/')[-1]
             # get paths of input files
-            path_to_fasta, path_to_gt_distances = get_input_data(input_data_path)
+            path_to_fasta, path_to_gt_newick = get_input_data(input_data_path)
             assert os.path.isfile(path_to_fasta), "Path to fasta does not exist"
-            assert os.path.isfile(path_to_gt_distances), "Path to distances does not exist"
+            assert os.path.isfile(path_to_gt_newick), "Path to distances does not exist"
             # init embedder
             embedder = ProtSeqEmbedder(model)
             # get embedding data
@@ -60,7 +62,7 @@ class TripletSamplingDataset(Dataset):
             self.ids[data_name] = seq_ids
 
             # set the cophentic distances
-            cophentic_dists = self._get_cophentic_distmatrix(path_to_gt_distances, data_name)
+            cophentic_dists = self._get_cophentic_distmatrix(path_to_gt_newick, data_name)
             cophentic_dists = zscore_normalize(cophentic_dists)
             self.cophentic_distances[data_name] = cophentic_dists
 
@@ -121,24 +123,19 @@ class TripletSamplingDataset(Dataset):
         self.negative_threshold = neg_threshold
         self.leeway = leeway
 
-    def _get_cophentic_distmatrix(self, path_to_distances, data_name) -> np.ndarray:
+    def _get_cophentic_distmatrix(self, path_to_gt_tree, data_name) -> np.ndarray:
         """
-        Computes a cophentic distance matrix given a path to distances from an MSA
-        1. Computes a Tree based on MSA distances
-        2. Calculates all pairwise distances in the tree
+        Computes a cophentic distance matrix given a path to gt tree
         Args:
-            path_to_distances: The path to the csv with the distances in a lower triangular format
+            path_to_gt_tree: The path to the gt tree in the newick format
 
         Returns:
             A dataframe with sequence names as index and columns and the respective distances
         """
         # build the tree
-        logger.debug(f"Loading distance matrix from {path_to_distances}")
-        treebuilder = TreeBuilder(_convert_to_full(pd.read_csv(path_to_distances, index_col=0)), is_truth=True)
-        newick_rep = treebuilder.compute_tree()
-        # read the tree and compute cophentic distances
-        t = Tree(newick_rep.format("newick"), parser=1)
-        cophentic_distances, names = t.cophenetic_matrix()
+        logger.debug(f"Loading gt tree from {path_to_gt_tree}")
+        treebuilder = TreeBuilder(path_to_tree_data=path_to_gt_tree, is_truth=True)
+        cophentic_distances, names = treebuilder.get_cophentic_distances()
 
         return pd.DataFrame(cophentic_distances, index=names, columns=names).reindex(self.ids[data_name], axis=0).reindex(self.ids[data_name],
                                                                                                                           axis=1).values

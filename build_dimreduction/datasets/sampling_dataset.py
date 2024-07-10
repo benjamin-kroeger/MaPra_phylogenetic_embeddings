@@ -12,7 +12,7 @@ from torch.utils.data import Dataset
 from build_dimreduction.utils.get_raw_embeddings import ProtSeqEmbedder
 from evaluation_visualization.tree_building import TreeBuilder
 from inference_pipeline.full_pipeline import get_input_data
-from evaluation_visualization.analysis_pipeline import _convert_to_full
+from evaluation_visualization.analysis_pipeline import convert_to_full
 
 logging.config.fileConfig(
     '/home/benjaminkroeger/Documents/Master/Master_3_Semester/MaPra/Learning_phy_distances/logging.config',
@@ -51,7 +51,7 @@ class SamplingDataset(Dataset):
 
     def _get_cophentic_distmatrix(self, path_to_distances):
         logger.debug(f"Loading distance matrix from {path_to_distances}")
-        treebuilder = TreeBuilder(_convert_to_full(pd.read_csv(path_to_distances, index_col=0)), is_truth=True)
+        treebuilder = TreeBuilder(convert_to_full(pd.read_csv(path_to_distances, index_col=0)), is_truth=True)
         newick_rep = treebuilder.compute_tree()
         t = Tree(newick_rep.format("newick"), parser=1)
         cophentic_distances, names = t.cophenetic_matrix()
