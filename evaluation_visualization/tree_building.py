@@ -72,6 +72,7 @@ class TreeBuilder:
 
 
     def find_longest_path_iterative(self):
+
         max_length = 0
         stack = [(self.ete_tree, 0)]  # Each element in stack is a tuple (node, cumulative_distance)
 

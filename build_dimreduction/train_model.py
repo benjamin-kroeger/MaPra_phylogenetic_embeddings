@@ -1,16 +1,15 @@
 import argparse
 from datetime import datetime
 
-import matplotlib.pyplot as plt
 import pytorch_lightning as pl
-import seaborn as sns
 import torch
 import wandb
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint, GradientAccumulationScheduler, LearningRateMonitor
 from pytorch_lightning.loggers import WandbLogger
 
-from build_dimreduction.datasets.triplet_sampling_dataset import TripletSamplingDataset
-from build_dimreduction.utils.triplet_mining import set_per_dataname_pairings, set_embedding_pairings
+from build_dimreduction.datasets.collate_funcs import my_collate
+from build_dimreduction.datasets.triplet_sampling_dataset import TripletSamplingDataset, UpdateDatasetCallback
+from build_dimreduction.utils.triplet_mining import set_embedding_pairings
 from models.ff_triplets import FF_Triplets
 
 
@@ -21,7 +20,7 @@ def init_parser():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     # Performance related arguments
-    parser.add_argument('--input_folder', type=str,nargs='+', required=True, help='Path to input folder')
+    parser.add_argument('--input_folder', type=str, nargs='+', required=True, help='Path to input folder')
     parser.add_argument('--num_workers', type=int, required=False, default=8,
                         help='CPU Cores')
     parser.add_argument('--half_precision', action='store_true', default=False, help='Train the model with torch.float16 instead of torch.float32')
@@ -44,7 +43,7 @@ def init_parser():
     return args
 
 
-def _setup_callback(args):
+def _setup_callback(args,model,dataset,device):
     """
     Sets up callbacks for training
     Args:
@@ -54,14 +53,16 @@ def _setup_callback(args):
          A list of callbacks for training
     """
     # set up early stopping and storage of the best model
-    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.005, patience=10, verbose=False, mode="min")
+    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.005, patience=20, verbose=False, mode="min")
     # set up storage of the best checkpoint path
     best_checkpoint = ModelCheckpoint(monitor='val_loss', save_top_k=1, mode="min", dirpath="build_dimreduction/Data/chpts",
                                       filename=args.model + "_{epoch:02d}_{val_loss:.4f}", auto_insert_metric_name=True)
     # set up lr monitor for future
     lr_monitor = LearningRateMonitor(logging_interval='step')
+    # update dataset callback
+    update_dataset_callback = UpdateDatasetCallback(model=model,dataset=dataset,device=device)
 
-    callbacks = [early_stop_callback, lr_monitor, best_checkpoint]
+    callbacks = [early_stop_callback, lr_monitor, best_checkpoint,update_dataset_callback]
 
     if args.acc_grad:
         # if needed gradient accumulation can be used
@@ -72,17 +73,48 @@ def _setup_callback(args):
 
 
 def get_model(args, device):
-    # init dataset
-    dataset = TripletSamplingDataset('prott5', args.input_folder, device=device)
+    """
+    Set up the model and send it to the device
+    Args:
+        args:
+        device:
+
+    Returns:
+        The model
+    """
     # init model
-    model = FF_Triplets(dataset=dataset, input_dim=1024, hidden_dim=args.hidden_dim, output_dim=args.output_dim, lr=args.lr,
+    model = FF_Triplets(input_dim=1024, hidden_dim=args.hidden_dim, output_dim=args.output_dim, lr=args.lr,
                         weight_decay=args.weight_decay,
                         postive_threshold=args.positive_threshold,
                         negative_threshold=args.negative_threshold,
                         batch_size=args.batch_size)
     model.to(device)
-    set_embedding_pairings(dataset, model.forward, device)
     return model
+
+
+def get_dataset(args, device, forward):
+    """
+    Initalize the dataset and set constants, pairings and plot inital state
+    Args:
+        args: the input args to set up the dataset
+        device: The device on which the dataset shall sit
+        forward: The models forward function to create embeddings for embedd distances
+
+    Returns:
+        The dataset
+    """
+    # init dataset
+    dataset = TripletSamplingDataset('prott5', args.input_folder, device=device)
+    # set the thresholds for ground truths
+    dataset.set_constants(pos_threshold=args.positive_threshold, neg_threshold=args.negative_threshold, leeway=args.leeway)
+    # plot the distance distributions
+    dataset.plot_distance_maps(distance_type='cophentic', mode='dist')
+    # compute ground truth embeddings
+    dataset.set_gt_pairings()
+    # compute the embedding distances
+    set_embedding_pairings(dataset, forward, device)
+
+    return dataset
 
 
 def main(args):
@@ -102,8 +134,9 @@ def main(args):
     # initialize 5 fold cross validation
     for fold in range(1):
         model = get_model(args, device)
+        dataset = get_dataset(args, device, model.forward)
 
-        callbacks = _setup_callback(args)
+        callbacks = _setup_callback(args,model, dataset, device)
         # set up a logger
         wandb_logger = WandbLogger(name=f'{experiment_name}_{fold}', project='MaPra')
         wandb_logger.watch(model)
@@ -120,8 +153,14 @@ def main(args):
             logger=wandb_logger,
             log_every_n_steps=3
         )
+        train_dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, pin_memory=True,
+                                                       num_workers=8, collate_fn=my_collate,shuffle=True,
+                                                       )
+        val_dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, pin_memory=True,
+                                                       num_workers=8, collate_fn=my_collate,
+                                                       )
         # train the model
-        trainer.fit(model)
+        trainer.fit(model, train_dataloaders=train_dataloader,val_dataloaders=val_dataloader)
         # load the best model and run one final validation
         best_model_path = trainer.checkpoint_callback.best_model_path
 

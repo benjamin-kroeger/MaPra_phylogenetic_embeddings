@@ -9,18 +9,16 @@ from typing import Literal
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import pytorch_lightning as pl
 import seaborn as sns
 import torch
-from ete4 import Tree
 from torch.utils.data import Dataset
 
 from build_dimreduction.utils.ProtSeqEmbedder import ProtSeqEmbedder
 from build_dimreduction.utils.seeding import get_input_data, zscore_normalize
-from evaluation_visualization.utils import convert_to_full
-from evaluation_visualization.tree_building import TreeBuilder
-
 from build_dimreduction.utils.triplet_mining import compute_pos_neg_pairs, multi_embedding_distances, neg_embedd_pairings, pos_embedd_pairings, \
-    sampled_triplets, pairing_access_locks, manager
+    sampled_triplets, pairing_access_locks, manager, set_embedding_pairings
+from evaluation_visualization.tree_building import TreeBuilder
 
 logging.config.fileConfig(
     '/home/benjaminkroeger/Documents/Master/Master_3_Semester/MaPra/Learning_phy_distances/logging.config',
@@ -32,9 +30,6 @@ class TripletSamplingDataset(Dataset):
     """
     This dataset creates triplets given a groundtruth matrix
     """
-
-
-    # TODO switch to input of tree data not distance matrix work with gt trees not distances
     def __init__(self, model: Literal['prott5', 'esm'], paths_to_input_data: list[str], device):
         self.ids = {}
         self.prott5_embeddings = {}
@@ -89,7 +84,7 @@ class TripletSamplingDataset(Dataset):
 
         self.positive_gt_pairs = {}
         self.negative_gt_pairs = {}
-
+        # plot the ground truth distance maps
         self.plot_distance_maps(distance_type='cophentic')
 
     def set_gt_pairings(self):
@@ -97,7 +92,6 @@ class TripletSamplingDataset(Dataset):
         Sets the pairs that will be considered as ground truth postives or neagtives during training
         Returns:
             None, Updates the instance variables
-
         """
 
         for key in self.cophentic_distances.keys():
@@ -113,6 +107,7 @@ class TripletSamplingDataset(Dataset):
         """
         Set the cophentic distance threshold for what is considered a positive or a negative pair
         Args:
+            leeway: The number of highest scoring candidates that is used
             pos_threshold: The positive threshold
             neg_threshold: The negative threshold
 
@@ -141,9 +136,18 @@ class TripletSamplingDataset(Dataset):
                                                                                                                           axis=1).values
 
     def __getitem__(self, idx):
+        """
+        Gets the item based on the index, the samples are continuously numbered
+        Args:
+            idx:
 
+        Returns:
+
+        """
+        # check which data set contains the requested index
         insertion_index = bisect(self.id_lengths, idx)
         data_name = self.data_names[insertion_index - 1]
+        # adjust the index so that is right for the selected dataset
         data_name_index = idx - self.id_lengths[insertion_index - 1]
         return self.simple_sampling(data_name_index, self.leeway, data_name)
 
@@ -158,11 +162,6 @@ class TripletSamplingDataset(Dataset):
         Returns:
 
         """
-        # Main idea
-        # Given an index the arrays that contain the indices for potential postives are fetched
-        # The indices in the GT array are sorted ascendingly, the indices in the EMBEDD array are sorted descendingly
-        # The intersection between the 2 arrays is computed with np.1dintersect [intersecting_value,index in arr1, index in arr2]
-        # Since the arrays are sorted in opposite direction the value where the distance of indices is the largest is the hardest value
 
         with pairing_access_locks[data_name]:
             if idx in self.positive_embedd_pairs[data_name].keys() and idx in self.positive_gt_pairs[data_name].keys():
@@ -197,11 +196,6 @@ class TripletSamplingDataset(Dataset):
             else:
                 negative_indices = np.array([self.negative_embedd_pairs[data_name][idx][-1]])
 
-        try:
-            test_len = len(negative_indices)
-        except TypeError:
-            print('hi')
-
         min_samples_found = min([len(positive_indices), len(negative_indices)])
 
         anchor_indices = np.array([idx] * min_samples_found)
@@ -229,12 +223,6 @@ class TripletSamplingDataset(Dataset):
         Returns:
 
         """
-        # Main idea
-        # Given an index the arrays that contain the indices for potential postives are fetched
-        # The indices in the GT array are sorted ascendingly, the indices in the EMBEDD array are sorted descendingly
-        # The intersection between the 2 arrays is computed with np.1dintersect [intersecting_value,index in arr1, index in arr2]
-        # Since the arrays are sorted in opposite direction the value where the distance of indices is the largest is the hardest value
-
         if idx in self.positive_gt_pairs[data_name].keys():
             potential_positive_indices = self.positive_gt_pairs[data_name][idx]
             positive_embedd_distances = self.dataset_embedding_distances[data_name][idx][potential_positive_indices]
@@ -330,19 +318,6 @@ class TripletSamplingDataset(Dataset):
             fig.tight_layout()
             plt.show()
 
-    def serialize_for_storage(self):
-        self.positive_embedd_pairs = {}
-        self.negative_embedd_pairs = {}
-        self.dataset_embedding_distances = {}
-
-    def set_shared_resources(self):
-        self.positive_embedd_pairs = pos_embedd_pairings
-        self.negative_embedd_pairs = neg_embedd_pairings
-
-        for data_name in self.ids.keys():
-            self.dataset_embedding_distances[data_name] = np.frombuffer(multi_embedding_distances[data_name].get_obj(), dtype=np.float64).reshape(
-                self.cophentic_distances[data_name].shape)
-
     def plot_distance_maps(self, distance_type: Literal['cophentic', 'embedd'], mode: Literal['distances', 'dist'] = 'distances', epoch: int = None):
 
         if distance_type == 'cophentic':
@@ -368,3 +343,29 @@ class TripletSamplingDataset(Dataset):
 
     def __len__(self):
         return sum([len(ids) for ids in self.ids.values()])
+
+
+class UpdateDatasetCallback(pl.Callback):
+    """
+    Why is this call back here. The embedding distances need to be updated across all instances of a dataloader.
+    That's why I needed to use multiprocessing shared resources. I need to update the distances after each batch,
+    I could do it by passing the dataset to the model and calling it every training step but then the dataset would
+    be serialize for storage which is a nightmare for shared resources. So i need this callback to update after each batch
+    """
+    def __init__(self, dataset, model, device):
+        super().__init__()
+        self.dataset = dataset
+        self.model = model
+        self.device = device
+
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
+        # Logic to update the dataset parameter after each batch
+        set_embedding_pairings(self.dataset, self.model.forward, self.device)
+
+    def on_validation_epoch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+        # plot some metrics after each val epoch
+        if trainer.current_epoch % 1 == 0:
+            # plot the embedding distances
+            self.dataset.plot_distance_maps(distance_type='embedd', mode='distances')
+            # plot the sampling
+            self.dataset.polt_triplet_sampling(epoch=trainer.current_epoch)
