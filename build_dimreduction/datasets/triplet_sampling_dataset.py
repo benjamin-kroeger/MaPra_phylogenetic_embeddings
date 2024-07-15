@@ -364,7 +364,7 @@ class UpdateDatasetCallback(pl.Callback):
 
     def on_validation_epoch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
         # plot some metrics after each val epoch
-        if trainer.current_epoch % 1 == 0:
+        if trainer.current_epoch % 10 == 0:
             # plot the embedding distances
             self.dataset.plot_distance_maps(distance_type='embedd', mode='distances')
             # plot the sampling

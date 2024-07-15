@@ -40,7 +40,7 @@ def align_dfs(df1, df2) -> tuple[pd.DataFrame, pd.DataFrame]:
     return df1, df2
 
 
-def analyse_distmaps(distmap1_pred: pd.DataFrame, distmap2_truth: pd.DataFrame):
+def compare_pred_dist_to_tree(distmap1_pred: pd.DataFrame, gt_tree: str):
     """
     Given 2 distance matrices, run a series of comparisons on the 2
     Args:
@@ -51,20 +51,21 @@ def analyse_distmaps(distmap1_pred: pd.DataFrame, distmap2_truth: pd.DataFrame):
         None
     """
     from evaluation_visualization.clustering import get_umap
-    # align the dfs for proper comparisson
-    distmap1_pred, distmap2_truth = align_dfs(distmap1_pred, distmap2_truth)
     logger.debug('Initializing distmap visualization')
     # create Trees for each dist matrix
-    distmap_visclust1 = TreeBuilder(distmap1_pred, is_truth=False)
-    distmap_visclust2 = TreeBuilder(distmap2_truth, is_truth=True)
+    pred_tree = TreeBuilder(distmap=distmap1_pred, is_truth=False)
+    gt_tree = TreeBuilder(path_to_tree_data=gt_tree, is_truth=True)
+
+    #plot the trees
+    pred_tree.draw_tree('/home/benjaminkroeger/Documents/Master/Master_3_Semester/MaPra/Learning_phy_distances/output_dir/Tree_nj_pred.png')
+    gt_tree.draw_tree('/home/benjaminkroeger/Documents/Master/Master_3_Semester/MaPra/Learning_phy_distances/output_dir/Tree_nj_truth.png')
 
     # geth umap
     get_umap(distmap1_pred)
 
     logger.debug('Visualizing and scoring new representations')
     clustering_results = [
-        ('nj', distmap_visclust1.get_tree(), distmap_visclust2.get_tree()), ]
-
+        ('nj', pred_tree.get_cophentic_distances()[0], gt_tree.get_cophentic_distances())[0], ]
     logger.debug('Computing distmap comparison metrics')
     metrics = []
     labels = []
@@ -97,4 +98,4 @@ if __name__ == '__main__':
     test_dist1 = sim_scorer.euclidean_distance(test_embedds1, test_embedds1)
     test_dist2 = sim_scorer.euclidean_distance(test_embedds2, test_embedds2)
 
-    analyse_distmaps(test_dist1, test_dist2)
+    compare_pred_dist_to_tree(test_dist1, test_dist2)

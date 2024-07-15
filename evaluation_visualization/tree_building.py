@@ -146,7 +146,7 @@ class TreeBuilder:
         circular_style.mode = 'c'  # draw tree in circular mode
         circular_style.layout_fn = layout
         # Write the tree to output
-        tree_vis_path = out_filepath % 'Tree' + '.png'
+        tree_vis_path = out_filepath
         logger.debug(f'Writing tree to {tree_vis_path}')
         self.ete_tree.render(tree_vis_path, w=1000, units='mm', tree_style=circular_style)
 

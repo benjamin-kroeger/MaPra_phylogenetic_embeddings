@@ -10,9 +10,9 @@ from matplotlib import pyplot as plt
 import torch.nn.functional as F
 from build_dimreduction.datasets.triplet_sampling_dataset import TripletSamplingDataset
 from build_dimreduction.models.ff_triplets import FF_Triplets
-from build_dimreduction.utils.get_raw_embeddings import ProtSeqEmbedder
+from build_dimreduction.utils.ProtSeqEmbedder import ProtSeqEmbedder
 from build_dimreduction.utils.seeding import get_input_data
-from evaluation_visualization.analysis_pipeline import analyse_distmaps
+from evaluation_visualization.analysis_pipeline import compare_pred_dist_to_tree
 from inference_pipeline.embedding_distance_metrics import sim_scorer
 
 
@@ -67,7 +67,7 @@ def get_newest_file():
 
 
 def main(args):
-    fasta_path, distance_path = get_input_data(args.input)
+    fasta_path, tree_path = get_input_data(args.input)
 
     embedder = ProtSeqEmbedder('prott5')
     embedd_data = zip(*embedder.get_raw_embeddings(fasta_path))
@@ -80,16 +80,12 @@ def main(args):
     #norm_embeddings = F.normalize(reduced_embeddings, p=2, dim=1)
     #distance_matrix = 1 - F.relu(torch.mm(norm_embeddings, norm_embeddings.t())).data.cpu().numpy()
     #distance_matrix[distance_matrix < 0] = 0
-    distance_truth = pd.read_csv(distance_path, index_col=0)
 
     ax = sns.heatmap(distance_matrix)
     ax.set_title('Distance Matrix Pred')
     plt.show()
-    ax = sns.heatmap(distance_truth)
-    ax.set_title('Distance matrix Truth')
-    plt.show()
 
-    analyse_distmaps(distmap1_pred=pd.DataFrame(distance_matrix, index=ids, columns=ids), distmap2_truth=distance_truth)
+    compare_pred_dist_to_tree(distmap1_pred=pd.DataFrame(distance_matrix, index=ids, columns=ids), gt_tree=tree_path)
 
 
 if __name__ == '__main__':
