@@ -79,8 +79,8 @@ class TripletSamplingDataset(Dataset):
 
         self.leeway = None
 
-        self.positive_threshold = None
-        self.negative_threshold = None
+        self.positive_threshold = {}
+        self.negative_threshold = {}
 
         self.positive_gt_pairs = {}
         self.negative_gt_pairs = {}
@@ -95,15 +95,16 @@ class TripletSamplingDataset(Dataset):
         """
 
         for key in self.cophentic_distances.keys():
-            positive_condition = ((self.cophentic_distances[key] < self.positive_threshold) & (self.cophentic_distances[key] > 0))
-            negative_condition = self.cophentic_distances[key] > self.negative_threshold
+
+            positive_condition = ((self.cophentic_distances[key] < self.positive_threshold[key]) & (self.cophentic_distances[key] > 0))
+            negative_condition = self.cophentic_distances[key] > self.negative_threshold[key]
 
             self.positive_gt_pairs[key], self.negative_gt_pairs[key] = compute_pos_neg_pairs(distance_matrix=self.cophentic_distances[key],
                                                                                              positive_condition=positive_condition,
                                                                                              negative_condition=negative_condition,
                                                                                              desc=False)
 
-    def set_constants(self, pos_threshold: float, neg_threshold: float, leeway: int):
+    def set_constants(self, pos_threshold: list[float], neg_threshold: list[float], leeway: int):
         """
         Set the cophentic distance threshold for what is considered a positive or a negative pair
         Args:
@@ -114,8 +115,11 @@ class TripletSamplingDataset(Dataset):
         Returns:
             None, Updates the instance variables
         """
-        self.positive_threshold = pos_threshold
-        self.negative_threshold = neg_threshold
+        for i,key in enumerate(self.cophentic_distances.keys()):
+
+            self.positive_threshold[key] = pos_threshold[i]
+            self.negative_threshold[key] = neg_threshold[i]
+
         self.leeway = leeway
 
     def _get_cophentic_distmatrix(self, path_to_gt_tree, data_name) -> np.ndarray:
@@ -331,8 +335,8 @@ class TripletSamplingDataset(Dataset):
                 sns.heatmap(map_type[key], ax=axs[i])
             elif mode == 'dist':
                 sns.histplot(map_type[key].flatten(), ax=axs[i])
-                axs[i].axvline(x=self.positive_threshold, color='r', linestyle='--')
-                axs[i].axvline(x=self.negative_threshold, color='r', linestyle='--')
+                axs[i].axvline(x=self.positive_threshold[key], color='r', linestyle='--')
+                axs[i].axvline(x=self.negative_threshold[key], color='r', linestyle='--')
 
             if epoch is not None:
                 axs[i].set_title(f'{key} epoch:{epoch}')

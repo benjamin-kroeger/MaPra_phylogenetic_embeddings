@@ -74,6 +74,7 @@ def main(args):
     ids, embeddings = list(embedd_data)
 
     reduced_embeddings = _dim_reduction(torch.stack(embeddings), args)
+    #reduced_embeddings = torch.stack(embeddings)
 
     # distance_matrix = 1- np.abs(sim_scorer.cosine_similarity(reduced_embeddings, reduced_embeddings))
     distance_matrix = np.abs(sim_scorer.euclidean_distance(reduced_embeddings.data.cpu().numpy(), reduced_embeddings.data.cpu().numpy()))

@@ -34,8 +34,8 @@ def init_parser():
     parser.add_argument('--batch_size', type=int, required=False, default=128, help='The batch_size')
     parser.add_argument('--hidden_dim', type=int, required=False, default=128, help='The size of the hidden layer')
     parser.add_argument('--output_dim', type=int, required=False, default=128, help='The size of the output layer')
-    parser.add_argument('--positive_threshold', type=float, required=False, default=0.4, help='The threshold for whats considered a positive')
-    parser.add_argument('--negative_threshold', type=float, required=False, default=0.7, help='The threshold for whats considered a negative')
+    parser.add_argument('--positive_threshold', type=float,nargs='+', required=False, default=[0.53,0.35], help='The threshold for whats considered a positive')
+    parser.add_argument('--negative_threshold', type=float,nargs='+', required=False, default=[0.7,0.56], help='The threshold for whats considered a negative')
     parser.add_argument('--leeway', type=int, required=False, default=1, help='How lax the sampling shall be')
 
     args = parser.parse_args()
@@ -94,7 +94,7 @@ def get_model(args, device):
 
 def get_dataset(args, device, forward):
     """
-    Initalize the dataset and set constants, pairings and plot inital state
+    Initialize the dataset and set constants, pairings and plot inital state
     Args:
         args: the input args to set up the dataset
         device: The device on which the dataset shall sit

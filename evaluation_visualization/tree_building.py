@@ -139,7 +139,7 @@ class TreeBuilder:
         Returns:
             None
         """
-        #self.find_longest_path_iterative() # not sure if this is even necessary
+        # self.find_longest_path_iterative() # not sure if this is even necessary
         # draw the tree
         circular_style = TreeStyle()
         circular_style.show_leaf_name = False
