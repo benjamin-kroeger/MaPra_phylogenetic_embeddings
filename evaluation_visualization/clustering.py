@@ -28,6 +28,3 @@ def get_umap(distance_matrix) -> np.array:
     # distances_umap = distance.cdist(umap_embedding.embedding_, umap_embedding.embedding_, metric='euclidean')
     # return distances_umap, umap_embedding
 
-
-def draw_tsne(self):
-    pass

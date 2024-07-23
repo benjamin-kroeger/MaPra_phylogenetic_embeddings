@@ -20,6 +20,8 @@ logging.config.fileConfig(
     disable_existing_loggers=False)
 logger = logging.getLogger(__name__)
 
+# define models that could be used to generate embeddings
+# e.g. prott5, esm2
 hugging_dict = {
     "prott5": {"model_name": r'Rostlab/prot_t5_xl_uniref50',
                "model_type": T5EncoderModel,
@@ -28,6 +30,9 @@ hugging_dict = {
 
 
 class ProtSeqEmbedder:
+    """
+    Class to handle embedding generation, storage and retrieval based on input path.
+    """
 
     def __init__(self, model: Literal['prott5', 'esm']):
         self.model_conf = hugging_dict.get(model)
@@ -41,15 +46,14 @@ class ProtSeqEmbedder:
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    def get_raw_embeddings(self, path_to_fasta: str, skip_fasta_loading: bool = False, pp: bool = True) -> list[tuple[str, torch.tensor]]:
+    def get_raw_embeddings(self, path_to_fasta: str, pp: bool = True) -> list[tuple[str, torch.tensor]]:
         """
-        This method returns the raw prott5_embeddings of protein sequences. If the fasta file has been converted to prott5_embeddings before, the
-        prott5_embeddings are read from the h5 file.
-        Identification is done by checking the hash over: first 10 Seqs, first 10 Ids, Modelname
+        This method returns the raw embeddings of protein sequences. If the fasta file has been converted to embeddings before, the
+        embeddings are read from the h5 file.
+        Identification is done by checking the hash over: first 10 Seqs, first 10 Ids, model name and file length
         Args:
             path_to_fasta: Path the fasta file that shall be read
-            skip_fasta_loading:
-            pp: Whether to load per protein prott5_embeddings
+            pp: Whether to load per protein embeddings
 
         Returns:
             A list containing the id and the embedding for each sequence
@@ -60,32 +64,40 @@ class ProtSeqEmbedder:
         fasta_ids = []
 
         with open(path_to_fasta, 'r') as fasta:
+            # get file length for bette file uniqueness criteria
             file_length = self._get_filelength(fasta)
+            # read the fasta sequence
             for i, record in enumerate(SeqIO.parse(fasta, 'fasta')):
                 fasta_seqs.append(str(record.seq))
                 fasta_ids.append(record.id)
 
-                # check if this fasta file has been seen before and if there are existing prott5_embeddings
+                # check if this fasta file has been seen before and if there are existing embeddings
                 if i == 10:
+                    # crate a hash across first 10 seqs, 10 ids, the model name and the file length
                     bof_hash = sha1(''.join(fasta_seqs + fasta_ids + [self.model_name,str(file_length)]).encode()).hexdigest()[:10]
+                    # if there is a dir with the hash as its name read from that dir
                     if bof_hash in self._get_h5_dirnames():
                         embedfile = os.path.join(self.output_path, bof_hash, embed_type + '.h5')
                         logger.debug(f'Found precomputed embedding file at {embedfile}')
                         return self._read_h5_embeddings(embedfile)
                     logger.debug('No precomputed embedding file found')
 
+        # In case no existing embeddings were found
         # init all the necessary huggingface model
         self._init_huggingface()
 
-        # create new dir and wirte pp and pa files
+        # create new dir and wire pp and pa files
         embedd_output_dir = os.path.join(self.output_path, bof_hash)
         os.mkdir(embedd_output_dir)
         for seq_id, seq in zip(fasta_ids, fasta_seqs):
             embedding = self._create_embeddings([seq])
+            # store the per protein embedding
             self.store_in_h5(header=seq_id, embedding_tensors=embedding.cpu().mean(axis=0), filename=os.path.join(embedd_output_dir, 'pp.h5'))
+            # store the per residue embedding
             self.store_in_h5(header=seq_id, embedding_tensors=embedding.cpu(), filename=os.path.join(embedd_output_dir, 'pa.h5'))
 
         logger.debug('Wrote embedding files adding meta data')
+        # add a json file with metadata to dir so its human-readable
         with open(os.path.join(embedd_output_dir, 'meta.json'), 'w') as meta:
             json.dump({
                 "fasta_file": path_to_fasta,
@@ -96,6 +108,7 @@ class ProtSeqEmbedder:
             }, meta, indent=4)
 
         embedfile = os.path.join(self.output_path, bof_hash, embed_type + '.h5')
+        # return reading the previously written files
         return self._read_h5_embeddings(embedfile)
 
     def _get_h5_dirnames(self) -> list[str]:

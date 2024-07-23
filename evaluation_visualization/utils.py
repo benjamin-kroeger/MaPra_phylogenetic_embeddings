@@ -1,5 +1,6 @@
 import seaborn as sns
-
+import pandas as pd
+import numpy as np
 color_palette = sns.color_palette("colorblind", 200)
 color_assignment = {}
 
@@ -23,3 +24,32 @@ def _square_to_lower_triangle(dist_square):
             row.append(dist_square[i][j])
         dist_lower_triangle.append(row)
     return dist_lower_triangle
+
+
+def _check_triangularitry(df: pd.DataFrame) -> bool:
+    """
+    Checks if the df is triangular.
+    Args:
+        df: The dataframe to check.
+
+    Returns:
+        True/False
+    """
+    return df.where(np.triu(np.ones(df.shape), k=1).astype(bool)).isna().all().all()
+
+
+def convert_to_full(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Converts a triangular df into a full dataframe.
+    Args:
+        df: The triangular df to convert.
+
+    Returns:
+        A square df
+    """
+    df = df.fillna(0)
+    full_matrix = df.values + df.values.T
+    np.fill_diagonal(full_matrix, 0)
+
+    full_df = pd.DataFrame(full_matrix, columns=df.columns, index=df.index)
+    return full_df
